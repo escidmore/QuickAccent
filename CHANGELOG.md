@@ -3,6 +3,18 @@
 All notable changes to QuickAccent are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **macOS: Accessibility grant never applied.** The release `.app` shipped
+  without a bundle-level code signature, so TCC had no stable requirement to
+  bind the grant to — toggling QuickAccent on in Accessibility did nothing and
+  duplicate entries accumulated. The release workflow, installer and brew
+  formula now ad-hoc sign the bundle. Launchers (brew service, LaunchAgent
+  template) start the app via `open -a` instead of exec'ing the binary, which
+  is the other case where TCC ignores the grant.
+
 ## [1.1.1] - 2026-09-02
 
 Fixes for Omarchy 4 / Hyprland reported in

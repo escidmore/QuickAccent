@@ -77,8 +77,21 @@ mkdir -p "$APP_DIR"
 rm -rf "$APP_DIR/QuickAccent.app"
 cp -R "$APP_SRC" "$APP_DIR/QuickAccent.app"
 
+# TCC binds the Accessibility grant to the bundle's code signature. An
+# unsigned bundle (older releases, source builds) has no stable requirement,
+# so the toggle silently never applies. Ad-hoc sign unless already valid.
+if ! codesign --verify --strict "$APP_DIR/QuickAccent.app" 2>/dev/null; then
+  echo "==> Ad-hoc sign $APP_DIR/QuickAccent.app"
+  codesign --force --sign - "$APP_DIR/QuickAccent.app"
+fi
+
 echo
 echo "Installed $APP_DIR/QuickAccent.app"
 echo "  • Grant Accessibility: System Settings → Privacy & Security → Accessibility"
+echo "    (if a stale QuickAccent entry is listed, remove it and add this one)"
 echo "  • Launch: open \"$APP_DIR/QuickAccent.app\""
+echo "    Always start it through Launch Services (open / Finder / a LaunchAgent"
+echo "    running open); exec'ing Contents/MacOS/quickaccent directly makes TCC"
+echo "    ignore the Accessibility grant."
+echo "  • Start at login: see dist/macos/README.md"
 echo "  • Or brew from source: brew install --HEAD ./dist/brew/Formula/quickaccent.rb"
