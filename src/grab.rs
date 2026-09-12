@@ -163,29 +163,6 @@ mod platform {
         unsafe { CGEventSourceKeyState(0, keycode) }
     }
 
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        #[test]
-        fn symbol_keys_can_be_physically_verified_and_selected() {
-            let _guard = crate::mappings::test_guard();
-            crate::mappings::init(&["Special".into(), "Typography".into()]);
-            for code in [18, 19, 20, 21, 23, 22, 26, 28, 25, 29, 43, 47, 27, 24, 44, 42, 75, 67, 39] {
-                let input = keycode_to_input(code);
-                let KeyInput::Letter(key) = input else { panic!("unmapped key {code}") };
-                assert_eq!(mapping_key_to_keycode(key), code as u16);
-                let mut state = StateMachine::new(0, 0, ActivationKey::Space);
-                state.handle_key_press(input, false);
-                assert!(matches!(state.handle_key_press(KeyInput::Space, false),
-                    (true, Some(GrabEvent::ShowOverlay { .. }))));
-                assert!(matches!(state.handle_key_release(input),
-                    (true, Some(GrabEvent::InjectChar(_)))));
-            }
-        }
-
-    }
-
     fn is_trigger_input(input: KeyInput) -> bool {
         matches!(input, KeyInput::Space | KeyInput::LeftArrow | KeyInput::RightArrow)
     }
@@ -318,6 +295,28 @@ mod platform {
 
         eprintln!("[QuickAccent] CGEventTap active. Listening for keys...");
         CFRunLoop::run_current();
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn symbol_keys_can_be_physically_verified_and_selected() {
+            let _guard = crate::mappings::test_guard();
+            crate::mappings::init(&["Special".into(), "Typography".into()]);
+            for code in [18, 19, 20, 21, 23, 22, 26, 28, 25, 29, 43, 47, 27, 24, 44, 42, 75, 67, 39] {
+                let input = keycode_to_input(code);
+                let KeyInput::Letter(key) = input else { panic!("unmapped key {code}") };
+                assert_eq!(mapping_key_to_keycode(key), code as u16);
+                let mut state = StateMachine::new(0, 0, ActivationKey::Space);
+                state.handle_key_press(input, false);
+                assert!(matches!(state.handle_key_press(KeyInput::Space, false),
+                    (true, Some(GrabEvent::ShowOverlay { .. }))));
+                assert!(matches!(state.handle_key_release(input),
+                    (true, Some(GrabEvent::InjectChar(_)))));
+            }
+        }
     }
 }
 
