@@ -10,14 +10,31 @@ use crate::state_machine::GrabEvent;
 static GRAB_RX: std::sync::OnceLock<Arc<Mutex<Option<UnboundedReceiver<GrabEvent>>>>> =
     std::sync::OnceLock::new();
 
-// Per-cell: ~28px font + 2*14px horizontal padding + 4px spacing ≈ 60px per cell
-// Plus 2*10px container padding + 2*12px for border radius margin
-const CELL_WIDTH: f32 = 56.0;
+const TEXT_SIZE: f32 = 28.0;
+const CELL_PADDING: f32 = 14.0;
+const CELL_SPACING: f32 = 4.0;
+// Outer padding (20px) plus a little spare room for rounding.
 const PADDING: f32 = 28.0;
 const WINDOW_HEIGHT: f32 = 70.0;
 
-fn window_width_for(count: usize) -> f32 {
-    PADDING + (count as f32 * CELL_WIDTH)
+fn window_width_for(variants: &[String]) -> f32 {
+    use iced::advanced::{graphics::text::Paragraph, text::{Paragraph as _, Text}};
+
+    PADDING + variants.iter().map(|variant| {
+        let content = variant_label(variant);
+        let paragraph = Paragraph::with_text(Text {
+            content: &content,
+            bounds: iced::Size::INFINITY,
+            size: TEXT_SIZE.into(),
+            line_height: Default::default(),
+            font: iced::Font::DEFAULT,
+            horizontal_alignment: iced::alignment::Horizontal::Left,
+            vertical_alignment: iced::alignment::Vertical::Top,
+            shaping: text::Shaping::Advanced,
+            wrapping: text::Wrapping::None,
+        });
+        paragraph.min_bounds().width.ceil() + 2.0 * CELL_PADDING + CELL_SPACING
+    }).sum::<f32>()
 }
 
 fn variant_label(ch: &str) -> String {
@@ -72,7 +89,7 @@ mod tests {
     #[test]
     fn symbol_glyphs_stay_inside_the_visible_label() {
         use iced::advanced::{text::{Paragraph as _, Text}, graphics::text::Paragraph};
-        for variant in ["﷼", "؋", "°C", "V\u{0307}", "…", "\u{0301}", "א", "אַ", "ײַ", "דזש", "\u{05b7}"] {
+        for variant in ["﷼", "؋", "°C", "°F", "V\u{0307}", "…", "\u{0301}", "SS", "א", "אַ", "ײַ", "דזש", "\u{05b7}"] {
             let content = variant_label(variant);
             let paragraph = Paragraph::with_text(Text {
                 content: &content,
@@ -90,15 +107,18 @@ mod tests {
             assert!(!glyphs.is_empty());
             assert!(glyphs.iter().all(|g| g.x >= 0.0 && g.x + g.w <= visible_width + 0.1),
                 "{content:?}: glyphs outside visible width {visible_width}");
+            let row = vec![variant.to_string(); 4];
+            let required_width = 20.0 + 4.0 * (visible_width + 28.0) + 3.0 * 4.0;
+            assert!(window_width_for(&row) >= required_width,
+                "{variant:?}: shaped row is wider than the overlay window");
         }
     }
 
     #[test]
     fn window_width_grows_with_variant_count() {
-        assert!(window_width_for(1) < window_width_for(2));
-        assert!(window_width_for(4) < window_width_for(8));
-        assert_eq!(window_width_for(0), PADDING);
-        assert_eq!(window_width_for(2), PADDING + 2.0 * CELL_WIDTH);
+        assert!(window_width_for(&["é".into()]) < window_width_for(&["é".into(), "é".into()]));
+        assert!(window_width_for(&["C".into()]) < window_width_for(&["°C".into()]));
+        assert_eq!(window_width_for(&[]), PADDING);
     }
 }
 
@@ -134,7 +154,7 @@ impl App {
         match message {
             Message::ShowOverlay(variants, index) => {
                 self.selected_index = index;
-                let width = window_width_for(variants.len());
+                let width = window_width_for(&variants);
                 self.variants = variants;
 
                 if let Some(id) = self.overlay_window {
@@ -178,10 +198,14 @@ impl App {
             .enumerate()
             .map(|(i, ch)| {
                 let is_selected = i == self.selected_index;
-                let label = text(variant_label(ch)).size(28).shaping(text::Shaping::Advanced);
+                let label = text(variant_label(ch))
+                    .size(TEXT_SIZE)
+                    .font(iced::Font::DEFAULT)
+                    .shaping(text::Shaping::Advanced)
+                    .wrapping(text::Wrapping::None);
 
                 let cell = container(label)
-                    .padding([8, 14])
+                    .padding([8.0, CELL_PADDING])
                     .style(move |_theme: &Theme| {
                         if is_selected {
                             container::Style {
@@ -210,7 +234,7 @@ impl App {
             })
             .collect();
 
-        container(row(cells).spacing(4).align_y(iced::Alignment::Center))
+        container(row(cells).spacing(CELL_SPACING).align_y(iced::Alignment::Center))
             .padding(10)
             .center_x(Length::Fill)
             .center_y(Length::Fill)

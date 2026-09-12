@@ -12,7 +12,7 @@ name = "quickaccent"
 path = "src/main.rs"
 
 [dependencies]
-iced = { version = "0.13", features = ["tokio"] }
+iced = { version = "0.13", features = ["tokio", "advanced"] }
 tokio = { version = "1", features = ["sync"] }
 log = "0.4"
 env_logger = "0.11"
@@ -20,10 +20,6 @@ serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 dirs = "6"
 notify = "8"
-
-[dev-dependencies]
-# Inspect shaped glyph bounds in rendering regression tests.
-iced = { version = "0.13", features = ["advanced"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 enigo = "0.6.1"
