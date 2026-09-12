@@ -1,8 +1,77 @@
 use cocoa::appkit::{NSApp, NSApplication, NSImage, NSMenu, NSMenuItem, NSStatusBar};
 use cocoa::base::{id, nil, selector};
 use cocoa::foundation::NSString;
+use core_foundation::base::{CFType, CFTypeRef, TCFType};
+use core_foundation::string::{CFString, CFStringRef};
+use core_graphics::geometry::{CGPoint, CGSize};
 use objc::runtime::Class;
 use objc::{msg_send, sel, sel_impl};
+use std::ffi::c_void;
+
+#[link(name = "ApplicationServices", kind = "framework")]
+extern "C" {
+    fn AXUIElementCreateSystemWide() -> CFTypeRef;
+    fn AXUIElementCopyAttributeValue(
+        element: CFTypeRef,
+        attribute: CFStringRef,
+        value: *mut CFTypeRef,
+    ) -> i32;
+    fn AXUIElementSetMessagingTimeout(element: CFTypeRef, timeout: f32) -> i32;
+    fn AXValueGetTypeID() -> core_foundation::base::CFTypeID;
+    fn AXValueGetValue(value: CFTypeRef, kind: u32, result: *mut c_void) -> bool;
+}
+
+fn ax_attribute(element: &CFType, name: &str) -> Option<CFType> {
+    let name = CFString::new(name);
+    let mut value = std::ptr::null();
+    unsafe {
+        if AXUIElementCopyAttributeValue(
+            element.as_CFTypeRef(),
+            name.as_concrete_TypeRef(),
+            &mut value,
+        ) != 0
+        {
+            return None;
+        }
+        Some(CFType::wrap_under_create_rule(value))
+    }
+}
+
+/// Global top-left coordinates in logical points, matching iced/winit on macOS.
+/// Query before opening the picker, while the user's app still has focus.
+pub fn focused_window_rect() -> Option<(f32, f32, f32, f32)> {
+    unsafe {
+        let system = CFType::wrap_under_create_rule(AXUIElementCreateSystemWide());
+        // A hung app must not stall the picker indefinitely. This runs on the
+        // UI thread, outside the time-sensitive keyboard tap callback.
+        AXUIElementSetMessagingTimeout(system.as_CFTypeRef(), 0.1);
+        let app = ax_attribute(&system, "AXFocusedApplication")?;
+        let window = ax_attribute(&app, "AXFocusedWindow")?;
+        let position = ax_attribute(&window, "AXPosition")?;
+        let size = ax_attribute(&window, "AXSize")?;
+        if position.type_of() != AXValueGetTypeID() || size.type_of() != AXValueGetTypeID() {
+            return None;
+        }
+        let mut point = CGPoint::new(0.0, 0.0);
+        let mut dimensions = CGSize::new(0.0, 0.0);
+        // kAXValueCGPointType = 1; kAXValueCGSizeType = 2.
+        if !AXValueGetValue(position.as_CFTypeRef(), 1, &mut point as *mut _ as *mut c_void)
+            || !AXValueGetValue(
+                size.as_CFTypeRef(),
+                2,
+                &mut dimensions as *mut _ as *mut c_void,
+            )
+        {
+            return None;
+        }
+        Some((
+            point.x as f32,
+            point.y as f32,
+            dimensions.width as f32,
+            dimensions.height as f32,
+        ))
+    }
+}
 
 pub fn setup_status_item() {
     unsafe {
