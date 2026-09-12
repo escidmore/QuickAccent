@@ -1,4 +1,4 @@
-# Special characters
+# Character sets
 
 Enable the sets you want in `~/.config/quickaccent/config.toml`:
 
@@ -66,3 +66,58 @@ picker order. The quote key is the US apostrophe/double-quote key, without Shift
 | CurrencyExtended | `l` | ₾ (lari) |
 | CurrencyExtended | `n` | ₦ (naira) |
 | CurrencyExtended | `r` | ₨ (rupee) |
+
+## Phonetic Hebrew and Yiddish
+
+Add `Hebrew` and/or `Yiddish` to `languages`, for example:
+
+```toml
+languages = ["French", "Hebrew", "Yiddish"]
+```
+
+Keep your Latin input source selected. These are individual-character pickers,
+not automatic transliterators: each held Latin key offers the choices below.
+Final forms (`ך ם ן ף ץ`) must be selected explicitly. Hebrew and Yiddish have no
+uppercase; Shift preserves their letters, vowel marks, and multi-letter choices.
+
+| Latin key | Hebrew | Yiddish |
+| --- | --- | --- |
+| a | א ע אַ אָ | אַ אָ א ײַ |
+| b | ב בּ | ב בּ בֿ |
+| c | צ ץ ח צ׳ | צ ץ טש |
+| d | ד דּ | ד דזש |
+| e | אֶ אֵ ע | ע ײ |
+| f | פ ף פֿ | פֿ ף |
+| g | ג גּ ג׳ | ג |
+| h | ה ח הּ | ה ח |
+| i | י אִ | י יִ |
+| j | ג׳ י | דזש י |
+| k | כ ך כּ ךּ ק | ק כּ כ ך |
+| l | ל | ל |
+| m | מ ם | מ ם |
+| n | נ ן | נ ן |
+| o | וֹ אֹ | אָ ױ |
+| p | פּ פ ף | פּ פ ף |
+| q | ק | ק |
+| r | ר | ר |
+| s | ס ש שׁ שׂ | ס ש שׂ ת |
+| t | ת ט תּ צ ץ | ט תּ ת צ ץ טש |
+| u | וּ אֻ | ו וּ |
+| v | ו ב בֿ | װ בֿ |
+| w | ו וו | װ |
+| x | ח כ ך | כ ך ח |
+| y | י | י ײ ײַ ױ |
+| z | ז ז׳ | ז זש |
+
+- **Comma:** geresh `׳`, gershayim `״`, and quotation marks.
+- **Hyphen:** maqaf `־`.
+- **Period:** combining vowel/letter marks. Hebrew includes sheva, hataf vowels,
+  hiriq, tsere, segol, patah, qamats, holam, holam haser, qubuts, dagesh, meteg,
+  rafe, shin/sin dots, and qamats qatan. Yiddish offers patah, qamats, hiriq,
+  dagesh, rafe, and sin dot.
+
+To add a standalone mark, first insert the Hebrew letter, then use the period
+picker. The mark combines with the preceding character. Pointed-letter choices
+already include their marks. Yiddish uses Unicode double-vav, vav-yod, and
+double-yod characters; `דזש`, `טש`, and `זש` are multi-letter sequences.
+Your editor controls right-to-left paragraph direction and font support.

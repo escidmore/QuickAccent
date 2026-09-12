@@ -99,6 +99,7 @@ pub fn load_config() -> Config {
 # Additional sets: Special, Currency
 # Extensions: Typography, Arrows, Math, CurrencyExtended
 # See docs/CHARACTERS.md for symbol bindings.
+# Hebrew/Yiddish use phonetic Latin keys; see docs/CHARACTERS.md.
 
 languages = ["French"]
 
