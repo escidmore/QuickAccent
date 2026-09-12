@@ -96,6 +96,9 @@ pub fn load_config() -> Config {
 #   Pinyin, Polish, Portuguese, ProtoIndoEuropean, Romanian,
 #   Romanization, ScottishGaelic, Serbian, Slovak, Slovenian,
 #   Spanish, Swedish, Turkish, Vietnamese, Welsh
+# Additional sets: Special, Currency
+# Extensions: Typography, Arrows, Math, CurrencyExtended
+# See docs/CHARACTERS.md for symbol bindings.
 
 languages = ["French"]
 

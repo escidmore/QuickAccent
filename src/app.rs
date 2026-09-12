@@ -20,6 +20,13 @@ fn window_width_for(count: usize) -> f32 {
     PADDING + (count as f32 * CELL_WIDTH)
 }
 
+fn variant_label(ch: &str) -> String {
+    // Display-only bases make combining marks visible. LRM prevents iced's
+    // shrink-width labels from clipping RTL currency glyphs at the far edge.
+    let base = if matches!(ch.chars().next(), Some('\u{0300}'..='\u{036f}')) { "◌" } else { "" };
+    format!("\u{200e}{base}{ch}")
+}
+
 /// Frame rect (x, y, w, h) of the window being typed in, set by the grab
 /// thread right before ShowOverlay — the overlay opens centered on it (i.e.
 /// on the monitor in use). None = center on the primary monitor.
@@ -60,6 +67,30 @@ fn overlay_settings(width: f32) -> window::Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn symbol_glyphs_stay_inside_the_visible_label() {
+        use iced::advanced::{text::{Paragraph as _, Text}, graphics::text::Paragraph};
+        for variant in ["﷼", "؋", "°C", "V\u{0307}", "…", "\u{0301}"] {
+            let content = variant_label(variant);
+            let paragraph = Paragraph::with_text(Text {
+                content: &content,
+                bounds: iced::Size::new(1000.0, 42.0),
+                size: 28.0.into(),
+                line_height: Default::default(),
+                font: iced::Font::DEFAULT,
+                horizontal_alignment: iced::alignment::Horizontal::Left,
+                vertical_alignment: iced::alignment::Vertical::Top,
+                shaping: text::Shaping::Advanced,
+                wrapping: Default::default(),
+            });
+            let visible_width = paragraph.min_bounds().width;
+            let glyphs: Vec<_> = paragraph.buffer().layout_runs().flat_map(|run| run.glyphs).collect();
+            assert!(!glyphs.is_empty());
+            assert!(glyphs.iter().all(|g| g.x >= 0.0 && g.x + g.w <= visible_width + 0.1),
+                "{content:?}: glyphs outside visible width {visible_width}");
+        }
+    }
 
     #[test]
     fn window_width_grows_with_variant_count() {
@@ -146,7 +177,7 @@ impl App {
             .enumerate()
             .map(|(i, ch)| {
                 let is_selected = i == self.selected_index;
-                let label = text(ch.clone()).size(28);
+                let label = text(variant_label(ch)).size(28).shaping(text::Shaping::Advanced);
 
                 let cell = container(label)
                     .padding([8, 14])

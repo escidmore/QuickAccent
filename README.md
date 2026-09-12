@@ -114,6 +114,13 @@ languages = ["French", "German", "Spanish"]
 
 **Languages:** Catalan, CrimeanTatar, Croatian, Czech, Danish, Dutch, Esperanto, Estonian, Finnish, French, German, Greek, Hungarian, IPA, Iceland, Irish, Italian, Kurdish, Lithuanian, Maltese, Maori, Norwegian, Pinyin, Polish, Portuguese, ProtoIndoEuropean, Romanian, Romanization, ScottishGaelic, Serbian, Slovak, Slovenian, Spanish, Swedish, Turkish, Vietnamese, Welsh
 
+**Additional sets:** `Special` (PowerToys symbols, punctuation, fractions and
+superscripts) and `Currency`.
+Optional extensions: `Typography`, `Arrows`, `Math`, and `CurrencyExtended`.
+Add these names to `languages` to enable them. Hold a punctuation or number key
+and trigger the picker just as you would for a letter. See
+[character bindings](docs/CHARACTERS.md) for configuration and symbol keys.
+
 ## Usage
 
 ```bash

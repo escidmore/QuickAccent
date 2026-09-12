@@ -21,6 +21,10 @@ toml = "0.8"
 dirs = "6"
 notify = "8"
 
+[dev-dependencies]
+# Inspect shaped glyph bounds in rendering regression tests.
+iced = { version = "0.13", features = ["advanced"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 enigo = "0.6.1"
 core-graphics = "0.24"
