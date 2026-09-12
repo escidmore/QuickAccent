@@ -494,6 +494,40 @@ mod platform {
             assert!(!m.update(Key::KeyE, true));
             assert!(!m.update(Key::Space, true));
         }
+
+        #[test]
+        fn symbol_events_use_the_expected_mapping_and_evdev_code() {
+            for (key, mapping, code, plain, shifted) in [
+                (Key::Num0, MappingKey::Num0, 11, "0", ")"),
+                (Key::Num1, MappingKey::Num1, 2, "1", "!"),
+                (Key::Num2, MappingKey::Num2, 3, "2", "@"),
+                (Key::Num3, MappingKey::Num3, 4, "3", "#"),
+                (Key::Num4, MappingKey::Num4, 5, "4", "$"),
+                (Key::Num5, MappingKey::Num5, 6, "5", "%"),
+                (Key::Num6, MappingKey::Num6, 7, "6", "^"),
+                (Key::Num7, MappingKey::Num7, 8, "7", "&"),
+                (Key::Num8, MappingKey::Num8, 9, "8", "*"),
+                (Key::Num9, MappingKey::Num9, 10, "9", "("),
+                (Key::Comma, MappingKey::Comma, 51, ",", "<"),
+                (Key::Dot, MappingKey::Period, 52, ".", ">"),
+                (Key::Minus, MappingKey::Minus, 12, "-", "_"),
+                (Key::Equal, MappingKey::Plus, 13, "=", "+"),
+                (Key::Slash, MappingKey::Slash, 53, "/", "?"),
+                (Key::BackSlash, MappingKey::Backslash, 43, "\\", "|"),
+                (Key::KpDivide, MappingKey::Divide, 98, "/", "/"),
+                (Key::KpMultiply, MappingKey::Multiply, 55, "*", "*"),
+                (Key::Quote, MappingKey::Quote, 40, "'", "\""),
+            ] {
+                assert_eq!(xkb_map::evdev_code_of(key), Some(code));
+                assert_eq!(xkb_map::evdev_code(mapping), code);
+                for event_type in [EventType::KeyPress(key), EventType::KeyRelease(key)] {
+                    for name in [None, Some(plain.to_string()), Some(shifted.to_string())] {
+                        let event = Event { time: std::time::SystemTime::UNIX_EPOCH, name, event_type };
+                        assert_eq!(event_to_input(&event), KeyInput::Letter(mapping), "{event:?}");
+                    }
+                }
+            }
+        }
     }
 
     /// Type the committed accent character, most direct mechanism first:
