@@ -166,4 +166,4 @@ Desktop grab/inject: [docs/MANUAL_TEST.md](docs/MANUAL_TEST.md).
 
 ## License
 
-MIT
+MIT. Third-party notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

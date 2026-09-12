@@ -19,7 +19,8 @@ Shift changes case, not the punctuation binding; use `=` without Shift for Plus.
 ## PowerToys sets
 
 `Special` and `Currency` use the corresponding
-[PowerToys tables](https://github.com/microsoft/PowerToys/blob/main/src/modules/poweraccent/PowerAccent.Common/CharacterMappings.cs).
+[PowerToys tables](https://github.com/microsoft/PowerToys/blob/main/src/modules/poweraccent/PowerAccent.Common/CharacterMappings.cs)
+(see [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)).
 Other PowerToys language tables are not imported by this change.
 
 - `.`: ellipses and combining accents.

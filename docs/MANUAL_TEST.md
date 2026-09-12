@@ -34,7 +34,8 @@ The following needs a real desktop session (permissions + compositor).
 - [ ] **Multi-monitor** (GNOME, after one re-login): overlay opens on the
       monitor of the focused window; without the shell extension it stays
       centered on the primary monitor
-- [ ] **AZERTY** (or non-QWERTY): accents match the character typed, not US physical key
+- [ ] **AZERTY** (or non-QWERTY): accents match the letter typed, not US physical key; punctuation and number triggers use physical US positions
+- [ ] **Special characters & punctuation**: with `Special`, `Currency`, or extensions in `languages`, holding punctuation/number keys (e.g. `-`, `=`, `1`) opens picker with symbols/fractions; combining accents and RTL currency symbols insert cleanly without display helpers
 - [ ] Config hot-reload: edit `~/.config/quickaccent/config.toml` languages without restart
 
 ## macOS
