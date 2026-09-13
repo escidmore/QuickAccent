@@ -166,6 +166,13 @@ fn overlay_position(size: iced::Size) -> window::Position {
     }
 }
 
+fn resized_centered_origin(origin: iced::Point, old_size: iced::Size, size: iced::Size) -> iced::Point {
+    iced::Point::new(
+        origin.x + (old_size.width - size.width) / 2.0,
+        origin.y + (old_size.height - size.height) / 2.0,
+    )
+}
+
 fn overlay_settings(size: iced::Size) -> window::Settings {
     #[allow(unused_mut)]
     let mut settings = window::Settings {
@@ -368,6 +375,22 @@ mod tests {
     }
 
     #[test]
+    fn centered_resize_preserves_the_center_for_growing_shrinking_and_unchanged_sizes() {
+        let origin = iced::Point::new(-1100.0, -535.0);
+        let old_size = iced::Size::new(200.0, 70.0);
+        for (size, expected) in [
+            (iced::Size::new(400.0, 110.0), iced::Point::new(-1200.0, -555.0)),
+            (iced::Size::new(100.0, 50.0), iced::Point::new(-1050.0, -525.0)),
+            (old_size, origin),
+        ] {
+            let moved = resized_centered_origin(origin, old_size, size);
+            assert_eq!(moved, expected);
+            assert_eq!(moved.x + size.width / 2.0, origin.x + old_size.width / 2.0);
+            assert_eq!(moved.y + size.height / 2.0, origin.y + old_size.height / 2.0);
+        }
+    }
+
+    #[test]
     fn overlay_follows_window_in_global_logical_coordinates() {
         // Screens left of or above the primary screen have negative origins.
         for (anchor, expected) in [
@@ -496,13 +519,26 @@ impl App {
         match message {
             Message::ShowOverlay(variants, index) => {
                 self.selected_index = index;
+                let old_size = overlay_size_for(&self.variants, self.items_per_page);
                 let size = overlay_size_for(&variants, self.items_per_page);
                 self.description_height = size.height - PICKER_ROW_HEIGHT - DESCRIPTION_SPACING;
                 self.variants = variants;
 
                 if let Some(id) = self.overlay_window {
-                    // Window already open, just resize and update
-                    return window::resize(id, size);
+                    if old_size == size {
+                        return window::resize(id, size);
+                    }
+                    if let window::Position::Specific(point) = overlay_position(size) {
+                        return Task::batch([window::resize(id, size), window::move_to(id, point)]);
+                    }
+                    // Centered has no explicit origin: preserve the existing window's center.
+                    // Read its position before resizing so both operations use the old geometry.
+                    return window::get_position(id).then(move |origin| {
+                        let move_task = origin.map(|origin| {
+                            window::move_to(id, resized_centered_origin(origin, old_size, size))
+                        }).unwrap_or_else(Task::none);
+                        Task::batch([window::resize(id, size), move_task])
+                    });
                 }
 
                 #[cfg(target_os = "macos")]
