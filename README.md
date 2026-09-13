@@ -107,12 +107,15 @@ INSTALL_FROM_SOURCE=1 ./dist/linux/install.sh
 
 ## Config
 
-`~/.config/quickaccent/config.toml` (created on first run; hot-reloaded):
+`~/.config/quickaccent/config.toml` is created on first run. Languages reload
+automatically; appearance is refreshed when a window opens. Restart to apply
+timing, activation-key, or pagination changes:
 
 ```toml
 languages = ["French", "German", "Spanish"]
 # hold_delay_ms = 250
 # theme = "system"   # or "light" / "dark" — picker and settings appearance
+# items_per_page = 0
 ```
 
 On macOS the *Settings…* window in the menu-bar menu edits `languages` and
@@ -138,6 +141,20 @@ provide complete Unicode 17.0 repertoires through Latin-key lookup. See
 [script bindings and casing](docs/CHARACTERS.md#cherokee-osage-and-canadian-syllabics).
 
 ## Usage
+
+### Picker pages
+
+`items_per_page = 0` is the default: show all choices without pagination or a
+counter. To enable pages, set a positive integer such as `items_per_page = 12`
+in `~/.config/quickaccent/config.toml`, then restart QuickAccent.
+
+Space or Right Arrow advances, Left Arrow goes back, and the display changes
+pages automatically. The counter shows the selected position and total (e.g.
+`1/113`), not a page number, and only appears when multiple pages exist.
+Cycling wraps at either end; releasing the original key inserts the selected
+character, and Escape cancels as usual. The widest page determines window
+width, so cycling does not resize it. Showing all choices (`items_per_page = 0`)
+can make long pickers wider than the screen.
 
 ```bash
 quickaccent
