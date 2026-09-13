@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.quickaccent.app</string>
+  <!--
+    Launch through Launch Services (open -a), not the raw binary: when launchd
+    execs Contents/MacOS/quickaccent directly, TCC does not honor the
+    Accessibility grant and the CGEventTap fails. Adjust the path if you
+    installed to ~/Applications.
+  -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/open</string>
+    <string>--stdout</string>
+    <string>/tmp/quickaccent.log</string>
+    <string>--stderr</string>
+    <string>/tmp/quickaccent.err</string>
+    <string>-a</string>
+    <string>/Applications/QuickAccent.app</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>LimitLoadToSessionType</key>
+  <string>Aqua</string>
+</dict>
+</plist>

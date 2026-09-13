@@ -3,6 +3,39 @@
 All notable changes to QuickAccent are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **macOS: Liquid Glass picker.** The accent overlay now sits on a native
+  glass backdrop (`NSGlassEffectView` on macOS 26+, a blurred
+  `NSVisualEffectView` before that) with chips and text that follow the
+  light/dark appearance, instead of an opaque dark panel.
+- **Settings window.** The menu-bar icon gains *Settings…* (⌘,): a checkbox
+  per language and symbol set, and an Appearance choice (System / Light /
+  Dark, `theme = "..."` in `config.toml`) for the picker and the settings
+  window. Changes apply immediately and rewrite only the affected line of
+  `config.toml`, keeping your comments and other settings.
+- `QUICKACCENT_DEMO=overlay|settings` opens that window at startup without
+  taking the keyboard grab — for screenshots and UI work.
+
+### Fixed
+
+- **macOS: picker opened on the primary display when typing on another
+  screen.** The focused-window lookup queried `AXFocusedApplication` on the
+  system-wide accessibility element, which fails with
+  `kAXErrorCannotComplete` on current macOS even for a trusted process, so the
+  overlay always fell back to centering on the primary display. It now resolves
+  the frontmost app through `NSWorkspace` and asks that app's own AX element
+  for its focused window.
+- **macOS: Accessibility grant never applied.** The release `.app` shipped
+  without a bundle-level code signature, so TCC had no stable requirement to
+  bind the grant to — toggling QuickAccent on in Accessibility did nothing and
+  duplicate entries accumulated. The release workflow, installer and brew
+  formula now ad-hoc sign the bundle. Launchers (brew service, LaunchAgent
+  template) start the app via `open -a` instead of exec'ing the binary, which
+  is the other case where TCC ignores the grant.
+
 ## [1.1.1] - 2026-09-02
 
 Fixes for Omarchy 4 / Hyprland reported in

@@ -11,6 +11,22 @@ pub enum MappingKey {
 
 type LangData = &'static [(MappingKey, &'static [&'static str])];
 
+/// Every language name `get_language_data` accepts, for the settings UI.
+/// Keep in sync with the match below — the test enforces it one way.
+pub const LANGUAGES: &[&str] = &[
+    "Catalan", "CrimeanTatar", "Croatian", "Czech", "Danish", "Dutch", "Esperanto",
+    "Estonian", "Finnish", "French", "German", "Greek", "Hebrew", "Hungarian", "IPA",
+    "Iceland", "Irish", "Italian", "Kurdish", "Lithuanian", "Maltese", "Maori",
+    "Norwegian", "Pinyin", "Polish", "Portuguese", "ProtoIndoEuropean", "Romanian",
+    "Romanization", "ScottishGaelic", "Serbian", "Slovak", "Slovenian", "Spanish",
+    "Swedish", "Turkish", "Vietnamese", "Welsh", "Yiddish",
+];
+
+/// Opt-in symbol sets (see docs/CHARACTERS.md), also valid in `languages`.
+pub const SYMBOL_SETS: &[&str] = &[
+    "Special", "Currency", "Typography", "Arrows", "Math", "CurrencyExtended",
+];
+
 static COMPILED_MAP: RwLock<Option<HashMap<MappingKey, Vec<String>>>> = RwLock::new(None);
 
 /// COMPILED_MAP is process-global and some tests reload it destructively —
@@ -613,6 +629,16 @@ fn get_language_data(name: &str) -> Option<LangData> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_listed_set_resolves_and_is_unique() {
+        let mut seen = std::collections::HashSet::new();
+        for name in LANGUAGES.iter().chain(SYMBOL_SETS) {
+            assert!(get_language_data(name).is_some(), "{name} is listed but unknown");
+            assert!(seen.insert(*name), "{name} listed twice");
+        }
+        assert!(LANGUAGES.windows(2).all(|w| w[0] < w[1]), "LANGUAGES must stay sorted");
+    }
 
     #[test]
     fn hebrew_yiddish_preserve_alphabets_marks_and_config_order() {

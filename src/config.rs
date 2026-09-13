@@ -8,6 +8,35 @@ pub enum ActivationKey {
     Both,
 }
 
+/// Appearance of the picker and the settings window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThemeChoice {
+    System,
+    Light,
+    Dark,
+}
+
+impl ThemeChoice {
+    pub const ALL: [ThemeChoice; 3] = [ThemeChoice::System, ThemeChoice::Light, ThemeChoice::Dark];
+
+    /// The value written to `config.toml`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ThemeChoice::System => "system",
+            ThemeChoice::Light => "light",
+            ThemeChoice::Dark => "dark",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ThemeChoice::System => "System",
+            ThemeChoice::Light => "Light",
+            ThemeChoice::Dark => "Dark",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     #[serde(default = "default_languages")]
@@ -18,10 +47,16 @@ pub struct Config {
     pub hold_delay_ms: u64,
     #[serde(default = "default_activation_key")]
     pub activation_key: String,
+    #[serde(default = "default_theme")]
+    pub theme: String,
 }
 
 fn default_languages() -> Vec<String> {
     vec!["French".to_string()]
+}
+
+fn default_theme() -> String {
+    "system".to_string()
 }
 
 fn default_input_time_ms() -> u64 {
@@ -44,6 +79,14 @@ impl Config {
             _ => ActivationKey::Both,
         }
     }
+
+    pub fn theme_parsed(&self) -> ThemeChoice {
+        match self.theme.to_ascii_lowercase().as_str() {
+            "light" => ThemeChoice::Light,
+            "dark" => ThemeChoice::Dark,
+            _ => ThemeChoice::System,
+        }
+    }
 }
 
 impl Default for Config {
@@ -53,6 +96,7 @@ impl Default for Config {
             input_time_ms: default_input_time_ms(),
             hold_delay_ms: default_hold_delay_ms(),
             activation_key: default_activation_key(),
+            theme: default_theme(),
         }
     }
 }
@@ -116,6 +160,10 @@ languages = ["French"]
 # Which key(s) trigger the accent overlay: "Space", "LeftRightArrow", or "Both"
 # Default: "Both"
 # activation_key = "Both"
+
+# Appearance of the picker and the settings window: "system", "light" or "dark"
+# Default: "system"
+# theme = "system"
 "#;
             std::fs::write(&path, default_toml).ok();
             config
@@ -133,6 +181,75 @@ pub fn read_config() -> Option<Config> {
 /// Parse config from a TOML string (tests + future tooling).
 pub fn parse_config_str(contents: &str) -> Result<Config, toml::de::Error> {
     toml::from_str(contents)
+}
+
+/// Persist a new `languages` list, touching nothing else in the file so the
+/// user's comments and other settings survive. The config watcher picks the
+/// change up like a manual edit.
+pub fn set_languages(languages: &[String]) -> std::io::Result<()> {
+    let value = format!(
+        "[{}]",
+        languages.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>().join(", ")
+    );
+    set_value("languages", &value)
+}
+
+/// Persist the appearance choice; see [`set_languages`].
+pub fn set_theme(theme: ThemeChoice) -> std::io::Result<()> {
+    set_value("theme", &format!("{:?}", theme.as_str()))
+}
+
+fn set_value(key: &str, rendered_value: &str) -> std::io::Result<()> {
+    let path = config_path();
+    let current = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(_) => {
+            load_config(); // writes the commented default template
+            std::fs::read_to_string(&path).unwrap_or_default()
+        }
+    };
+    std::fs::write(&path, replace_assignment(&current, key, rendered_value))
+}
+
+/// Replace the `key = ...` assignment (a single-line value or a multi-line
+/// array) in a TOML document, or append one if missing.
+fn replace_assignment(toml: &str, key: &str, rendered_value: &str) -> String {
+    let rendered = format!("{key} = {rendered_value}");
+    let mut out = String::with_capacity(toml.len() + rendered.len());
+    let mut lines = toml.lines();
+    let mut replaced = false;
+    while let Some(line) = lines.next() {
+        let trimmed = line.trim_start();
+        let is_key = !replaced
+            && trimmed.starts_with(key)
+            && trimmed[key.len()..].trim_start().starts_with('=');
+        if is_key {
+            // Skip the rest of a multi-line array.
+            let mut rest = &line[line.find('=').unwrap() + 1..];
+            if rest.trim_start().starts_with('[') {
+                while !rest.contains(']') {
+                    match lines.next() {
+                        Some(l) => rest = l,
+                        None => break,
+                    }
+                }
+            }
+            out.push_str(&rendered);
+            out.push('\n');
+            replaced = true;
+        } else {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    if !replaced {
+        if !out.is_empty() && !out.ends_with("\n\n") {
+            out.push('\n');
+        }
+        out.push_str(&rendered);
+        out.push('\n');
+    }
+    out
 }
 
 #[cfg(test)]
@@ -191,5 +308,46 @@ mod tests {
     #[test]
     fn invalid_toml_errors() {
         assert!(parse_config_str("languages = [").is_err());
+    }
+
+    #[test]
+    fn replace_assignment_keeps_everything_else() {
+        let doc = "# QuickAccent Configuration\n# comment\n\nlanguages = [\"French\"]\n\n# hold\n# hold_delay_ms = 250\ninput_time_ms = 100\n";
+        let out = replace_assignment(doc, "languages", "[\"German\", \"Spanish\"]");
+        assert_eq!(
+            out,
+            "# QuickAccent Configuration\n# comment\n\nlanguages = [\"German\", \"Spanish\"]\n\n# hold\n# hold_delay_ms = 250\ninput_time_ms = 100\n"
+        );
+        let parsed = parse_config_str(&out).unwrap();
+        assert_eq!(parsed.languages, ["German", "Spanish"]);
+        assert_eq!(parsed.input_time_ms, 100);
+    }
+
+    #[test]
+    fn replace_assignment_handles_multiline_missing_and_lookalikes() {
+        let multi = "languages = [\n  \"French\",\n  \"German\",\n]\nhold_delay_ms = 300\n";
+        assert_eq!(
+            replace_assignment(multi, "languages", "[\"Welsh\"]"),
+            "languages = [\"Welsh\"]\nhold_delay_ms = 300\n"
+        );
+        // Commented-out or similarly named keys are left alone; a missing key is appended.
+        let none = "# languages = [\"French\"]\nlanguages_extra = 1\n";
+        assert_eq!(
+            replace_assignment(none, "languages", "[\"Welsh\"]"),
+            "# languages = [\"French\"]\nlanguages_extra = 1\n\nlanguages = [\"Welsh\"]\n"
+        );
+        assert_eq!(replace_assignment("", "languages", "[]"), "languages = []\n");
+    }
+
+    #[test]
+    fn theme_round_trips_through_the_file() {
+        let doc = "languages = [\"French\"]\n# theme = \"system\"\n";
+        let out = replace_assignment(doc, "theme", "\"dark\"");
+        assert_eq!(out, "languages = [\"French\"]\n# theme = \"system\"\n\ntheme = \"dark\"\n");
+        assert_eq!(parse_config_str(&out).unwrap().theme_parsed(), ThemeChoice::Dark);
+        let again = replace_assignment(&out, "theme", "\"light\"");
+        assert_eq!(parse_config_str(&again).unwrap().theme_parsed(), ThemeChoice::Light);
+        assert_eq!(Config::default().theme_parsed(), ThemeChoice::System);
+        assert_eq!(parse_config_str("theme = \"weird\"\n").unwrap().theme_parsed(), ThemeChoice::System);
     }
 }
