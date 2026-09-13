@@ -7,6 +7,13 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **macOS: picker opened on the primary display when typing on another
+  screen.** The focused-window lookup queried `AXFocusedApplication` on the
+  system-wide accessibility element, which fails with
+  `kAXErrorCannotComplete` on current macOS even for a trusted process, so the
+  overlay always fell back to centering on the primary display. It now resolves
+  the frontmost app through `NSWorkspace` and asks that app's own AX element
+  for its focused window.
 - **macOS: Accessibility grant never applied.** The release `.app` shipped
   without a bundle-level code signature, so TCC had no stable requirement to
   bind the grant to — toggling QuickAccent on in Accessibility did nothing and

@@ -10,7 +10,7 @@ use std::ffi::c_void;
 
 #[link(name = "ApplicationServices", kind = "framework")]
 extern "C" {
-    fn AXUIElementCreateSystemWide() -> CFTypeRef;
+    fn AXUIElementCreateApplication(pid: i32) -> CFTypeRef;
     fn AXUIElementCopyAttributeValue(
         element: CFTypeRef,
         attribute: CFStringRef,
@@ -37,15 +37,31 @@ fn ax_attribute(element: &CFType, name: &str) -> Option<CFType> {
     }
 }
 
+/// PID of the app the user is typing in, via NSWorkspace. Not the system-wide
+/// AX element: `AXFocusedApplication` on it fails outright with
+/// kAXErrorCannotComplete on current macOS even for a trusted process, which
+/// silently sent the picker to the primary display.
+fn frontmost_pid() -> Option<i32> {
+    unsafe {
+        let workspace: id = msg_send![Class::get("NSWorkspace")?, sharedWorkspace];
+        let app: id = msg_send![workspace, frontmostApplication];
+        if app == nil {
+            return None;
+        }
+        let pid: i32 = msg_send![app, processIdentifier];
+        // Never anchor the overlay to ourselves.
+        (pid != std::process::id() as i32).then_some(pid)
+    }
+}
+
 /// Global top-left coordinates in logical points, matching iced/winit on macOS.
 /// Query before opening the picker, while the user's app still has focus.
 pub fn focused_window_rect() -> Option<(f32, f32, f32, f32)> {
     unsafe {
-        let system = CFType::wrap_under_create_rule(AXUIElementCreateSystemWide());
+        let app = CFType::wrap_under_create_rule(AXUIElementCreateApplication(frontmost_pid()?));
         // A hung app must not stall the picker indefinitely. This runs on the
         // UI thread, outside the time-sensitive keyboard tap callback.
-        AXUIElementSetMessagingTimeout(system.as_CFTypeRef(), 0.1);
-        let app = ax_attribute(&system, "AXFocusedApplication")?;
+        AXUIElementSetMessagingTimeout(app.as_CFTypeRef(), 0.25);
         let window = ax_attribute(&app, "AXFocusedWindow")?;
         let position = ax_attribute(&window, "AXPosition")?;
         let size = ax_attribute(&window, "AXSize")?;
@@ -70,6 +86,22 @@ pub fn focused_window_rect() -> Option<(f32, f32, f32, f32)> {
             dimensions.width as f32,
             dimensions.height as f32,
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Manual probe — needs Accessibility trust for the test process:
+    /// `cargo test focused_window_rect_probe -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn focused_window_rect_probe() {
+        let rect = focused_window_rect();
+        eprintln!("frontmost pid={:?} rect={rect:?}", frontmost_pid());
+        let (_, _, w, h) = rect.expect("focused window rect (is the test process trusted?)");
+        assert!(w > 0.0 && h > 0.0);
     }
 }
 
