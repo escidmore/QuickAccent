@@ -51,38 +51,36 @@ class Quickaccent < Formula
       </dict>
       </plist>
     PLIST
+
+    # Ad-hoc sign the bundle so TCC can bind the Accessibility grant to it.
+    system "codesign", "--force", "--sign", "-", app
   end
 
+  # Launch via `open` (Launch Services). When launchd execs the binary
+  # directly, TCC ignores the Accessibility grant and the event tap fails.
+  # `open` returns immediately, so no keep_alive.
   service do
-    run [opt_prefix/"QuickAccent.app/Contents/MacOS/quickaccent"]
-    keep_alive true
+    run ["/usr/bin/open", "--stdout", "/tmp/quickaccent.log",
+         "--stderr", "/tmp/quickaccent.err",
+         "-a", opt_prefix/"QuickAccent.app"]
     run_at_load true
-    log_path "/tmp/quickaccent.log"
-    error_log_path "/tmp/quickaccent.err"
-  end
-
-  def post_install
-    # Symlink LaunchAgent into user's LaunchAgents directory
-    launch_agents = Pathname.new(ENV["HOME"]) + "Library/LaunchAgents"
-    launch_agents.mkpath
-    (launch_agents/"com.quickaccent.app.plist").make_symlink(prefix/"quickaccent.plist")
   end
 
   def caveats
     <<~EOS
-      QuickAccent is now installed and will launch at login via LaunchAgent.
-
       IMPORTANT: Grant Accessibility permission:
-        System Settings → Privacy & Security → Accessibility → add QuickAccent (or your terminal).
+        System Settings → Privacy & Security → Accessibility → add
+        #{opt_prefix}/QuickAccent.app
+        (remove any stale QuickAccent entry from a previous install first).
 
       Prebuilt (no Rust) alternative:
         curl -fsSL https://raw.githubusercontent.com/victormasson/QuickAccent/master/dist/macos/install.sh | bash
 
-      To start immediately (without logging out/in):
-        launchctl load ~/Library/LaunchAgents/com.quickaccent.app.plist
+      To start now and at login:
+        brew services start quickaccent
 
       To stop:
-        launchctl unload ~/Library/LaunchAgents/com.quickaccent.app.plist
+        brew services stop quickaccent
 
       Logs: /tmp/quickaccent.log and /tmp/quickaccent.err
     EOS

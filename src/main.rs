@@ -83,7 +83,13 @@ fn main() -> iced::Result {
     #[cfg(target_os = "linux")]
     linux_setup();
 
-    grab::run_grab_thread(tx, &config);
+    // QUICKACCENT_DEMO opens a window for inspection; a second instance must
+    // not also take over the keyboard.
+    if std::env::var_os("QUICKACCENT_DEMO").is_none() {
+        grab::run_grab_thread(tx, &config);
+    } else {
+        drop(tx);
+    }
 
     #[cfg(target_os = "macos")]
     crate::macos::setup_status_item();
@@ -92,6 +98,7 @@ fn main() -> iced::Result {
     iced::daemon("QuickAccent", app::App::update, app::App::view)
         .subscription(app::App::subscription)
         .theme(app::App::theme)
+        .style(app::App::style)
         .run_with(move || app::App::new(grab_rx_clone.clone(), config.items_per_page))
 }
 
