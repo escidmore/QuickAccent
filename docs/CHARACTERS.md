@@ -69,17 +69,7 @@ picker order. The quote key is the US apostrophe/double-quote key, without Shift
 
 ## Picker pagination
 
-By default, `items_per_page = 0` shows all choices without pagination or a counter.
-Long lists can extend beyond the screen in this mode. To enable pagination, set
-`items_per_page = 12` (or another positive integer) in
-`~/.config/quickaccent/config.toml`, then restart QuickAccent.
-
-Space or Right Arrow advances, Left Arrow goes back, and the display changes
-pages automatically. The counter shows the **selected position / total choices**,
-not a page number. Cycling wraps at either end; releasing the original key inserts
-the selected character from the full list. Escape cancels as usual. The widest
-page determines window width, so cycling does not resize it. A page size greater
-than or equal to the number of choices shows one row with no counter.
+For long character sets, see [Picker pages](../README.md#picker-pages) to configure pagination via `items_per_page`.
 
 ## Phonetic Hebrew and Yiddish
 
