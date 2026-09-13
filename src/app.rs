@@ -20,8 +20,8 @@ fn window_width_for(count: usize) -> f32 {
     PADDING + (count as f32 * CELL_WIDTH)
 }
 
-/// Frame rect (x, y, w, h) of the window being typed in, set by the grab
-/// thread right before ShowOverlay — the overlay opens centered on it (i.e.
+/// Frame rect (x, y, w, h) of the window being typed in, refreshed before
+/// opening the overlay — the overlay opens centered on it (i.e.
 /// on the monitor in use). None = center on the primary monitor.
 static OVERLAY_ANCHOR: Mutex<Option<(f32, f32, f32, f32)>> = Mutex::new(None);
 
@@ -68,6 +68,24 @@ mod tests {
         assert_eq!(window_width_for(0), PADDING);
         assert_eq!(window_width_for(2), PADDING + 2.0 * CELL_WIDTH);
     }
+
+    #[test]
+    fn overlay_follows_window_in_global_logical_coordinates() {
+        // Screens left of or above the primary screen have negative origins.
+        for (anchor, expected) in [
+            ((2000.0, 100.0, 1000.0, 800.0), (2400.0, 465.0)),
+            ((-1600.0, -900.0, 1200.0, 800.0), (-1100.0, -535.0)),
+        ] {
+            set_overlay_anchor(Some(anchor));
+            let window::Position::Specific(point) = overlay_position(200.0) else {
+                panic!("expected focused-window position");
+            };
+            assert_eq!((point.x, point.y), expected);
+        }
+        // An unavailable focused window must clear the previous anchor.
+        set_overlay_anchor(None);
+        assert!(matches!(overlay_position(200.0), window::Position::Centered));
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -109,6 +127,9 @@ impl App {
                     // Window already open, just resize and update
                     return window::resize(id, iced::Size::new(width, WINDOW_HEIGHT));
                 }
+
+                #[cfg(target_os = "macos")]
+                set_overlay_anchor(crate::macos::focused_window_rect());
 
                 let settings = overlay_settings(width);
                 let (id, open_task) = window::open(settings);
