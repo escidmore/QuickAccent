@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 
+#[path = "script_mappings.rs"]
+mod script_mappings;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MappingKey {
     A, B, C, D, E, F, G, H, I, J, K, L, M,
@@ -91,6 +94,14 @@ fn build_map(languages: &[String]) -> HashMap<MappingKey, Vec<String>> {
 
 fn get_language_data(name: &str) -> Option<LangData> {
     match name {
+        "Cherokee" => Some(script_mappings::CHEROKEE),
+        "Osage" => Some(script_mappings::OSAGE),
+        "CanadianAboriginalSyllabics" | "Unified Canadian Aboriginal Syllabics"
+        | "Unified_Canadian_Aboriginal_Syllabics" => Some(script_mappings::CANADIAN),
+        "CanadianAboriginalSyllabicsExtended" | "Unified Canadian Aboriginal Syllabics Extended"
+        | "Unified_Canadian_Aboriginal_Syllabics_Extended" => Some(script_mappings::CANADIAN_EXTENDED),
+        "CanadianAboriginalSyllabicsExtendedA" | "Unified Canadian Aboriginal Syllabics Extended-A"
+        | "Unified_Canadian_Aboriginal_Syllabics_Extended_A" => Some(script_mappings::CANADIAN_EXTENDED_A),
         // PowerToys PowerAccent.Common/CharacterMappings.cs, MIT licensed.
         // Copyright (c) Microsoft Corporation. See THIRD_PARTY_NOTICES.md.
         "Special" => Some(&[
