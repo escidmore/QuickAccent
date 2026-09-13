@@ -92,7 +92,7 @@ fn main() -> iced::Result {
     iced::daemon("QuickAccent", app::App::update, app::App::view)
         .subscription(app::App::subscription)
         .theme(app::App::theme)
-        .run_with(move || app::App::new(grab_rx_clone.clone()))
+        .run_with(move || app::App::new(grab_rx_clone.clone(), config.items_per_page))
 }
 
 /// Linux startup sequence with load-bearing ordering: make every accent

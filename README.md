@@ -127,6 +127,14 @@ for letters, final forms, vowel marks, and Yiddish combinations.
 
 ## Usage
 
+### Picker pages
+
+`items_per_page = 0` is the default: show all choices without pagination or a
+counter. To enable pages, set a positive integer such as `items_per_page = 12`
+in `~/.config/quickaccent/config.toml`, then restart QuickAccent. Space/arrows
+move through all choices; the counter shows the selected position and total.
+Showing all choices can make long pickers wider than the screen.
+
 ```bash
 quickaccent
 RUST_LOG=debug quickaccent

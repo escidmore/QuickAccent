@@ -18,6 +18,12 @@ pub struct Config {
     pub hold_delay_ms: u64,
     #[serde(default = "default_activation_key")]
     pub activation_key: String,
+    #[serde(default = "default_items_per_page")]
+    pub items_per_page: usize,
+}
+
+fn default_items_per_page() -> usize {
+    0
 }
 
 fn default_languages() -> Vec<String> {
@@ -53,6 +59,7 @@ impl Default for Config {
             input_time_ms: default_input_time_ms(),
             hold_delay_ms: default_hold_delay_ms(),
             activation_key: default_activation_key(),
+            items_per_page: default_items_per_page(),
         }
     }
 }
@@ -72,8 +79,8 @@ pub fn load_config() -> Config {
     match std::fs::read_to_string(&path) {
         Ok(contents) => match toml::from_str::<Config>(&contents) {
             Ok(config) => {
-                eprintln!("[QuickAccent] Loaded config: languages = {:?}, input_time_ms = {}, hold_delay_ms = {}, activation_key = {}",
-                    config.languages, config.input_time_ms, config.hold_delay_ms, config.activation_key);
+                eprintln!("[QuickAccent] Loaded config: languages = {:?}, input_time_ms = {}, hold_delay_ms = {}, activation_key = {}, items_per_page = {}",
+                    config.languages, config.input_time_ms, config.hold_delay_ms, config.activation_key, config.items_per_page);
                 config
             }
             Err(e) => {
@@ -102,6 +109,9 @@ pub fn load_config() -> Config {
 # Hebrew/Yiddish use phonetic Latin keys; see docs/CHARACTERS.md.
 
 languages = ["French"]
+
+# Maximum choices visible per page. 0 shows all choices (default). Restart to apply.
+# items_per_page = 0
 
 # Minimum time (ms) the letter must be held before accent is committed.
 # If released sooner, it's treated as a false start and the trigger key
@@ -191,5 +201,17 @@ mod tests {
     #[test]
     fn invalid_toml_errors() {
         assert!(parse_config_str("languages = [").is_err());
+    }
+
+    #[test]
+    fn page_size_defaults_and_validation() {
+        assert_eq!(Config::default().items_per_page, 0);
+        assert_eq!(parse_config_str("").unwrap().items_per_page, 0);
+        for size in [0, 1, 8, 12, 24, 1000] {
+            assert_eq!(parse_config_str(&format!("items_per_page = {size}")).unwrap().items_per_page, size);
+        }
+        for value in ["-1", "1.5", "\"12\""] {
+            assert!(parse_config_str(&format!("items_per_page = {value}")).is_err());
+        }
     }
 }
