@@ -80,6 +80,8 @@ open ~/Applications/QuickAccent.app
 ```
 
 Grant **Accessibility** (System Settings → Privacy & Security).  
+The menu-bar icon has *Settings…* (⌘,) to pick languages and symbol sets; the
+picker draws on Liquid Glass (macOS 26+; a blur on older releases).  
 Details: [dist/macos/README.md](dist/macos/README.md).
 
 Homebrew (builds from source):
@@ -110,7 +112,12 @@ INSTALL_FROM_SOURCE=1 ./dist/linux/install.sh
 ```toml
 languages = ["French", "German", "Spanish"]
 # hold_delay_ms = 250
+# theme = "system"   # or "light" / "dark" — picker and settings appearance
 ```
+
+On macOS the *Settings…* window in the menu-bar menu edits `languages` and
+`theme` for you (only those lines are rewritten; comments and other keys are
+kept).
 
 **Languages:** Catalan, CrimeanTatar, Croatian, Czech, Danish, Dutch, Esperanto, Estonian, Finnish, French, German, Greek, Hungarian, IPA, Iceland, Irish, Italian, Kurdish, Lithuanian, Maltese, Maori, Norwegian, Pinyin, Polish, Portuguese, ProtoIndoEuropean, Romanian, Romanization, ScottishGaelic, Serbian, Slovak, Slovenian, Spanish, Swedish, Turkish, Vietnamese, Welsh
 
@@ -136,6 +143,8 @@ provide complete Unicode 17.0 repertoires through Latin-key lookup. See
 quickaccent
 RUST_LOG=debug quickaccent
 journalctl --user -u quickaccent -f
+QUICKACCENT_DEMO=overlay quickaccent   # or =settings: open that window at
+                                        # startup, no keyboard grab (UI work)
 ```
 
 Runs as a background daemon. On Linux the overlay renders through XWayland so
