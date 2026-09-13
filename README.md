@@ -142,6 +142,18 @@ provide complete Unicode 17.0 repertoires through Latin-key lookup. See
 
 ## Usage
 
+### Character descriptions
+
+Below the choices, the picker shows the selected character's Unicode code point
+and official Unicode 17.0 name, for example `(U+0163) LATIN SMALL LETTER T WITH
+CEDILLA`. The description follows selection and Shift/case changes. Choices
+containing multiple characters list each code point and name in order, including
+combining marks; display-only dotted circles are not included.
+
+Long descriptions wrap, with space reserved for every choice so cycling between
+characters or pages does not resize the picker. Names are shown in English as
+published by Unicode.
+
 ### Picker pages
 
 `items_per_page = 0` is the default: show all choices without pagination or a

@@ -43,8 +43,49 @@ const CELL_PADDING: f32 = 14.0;
 const CELL_SPACING: f32 = 4.0;
 // Outer padding (20px) plus a little spare room for rounding.
 const PADDING: f32 = 28.0;
-const WINDOW_HEIGHT: f32 = 70.0;
+const PICKER_ROW_HEIGHT: f32 = 70.0;
 const PAGE_COUNTER_WIDTH: f32 = 80.0;
+const DESCRIPTION_SIZE: f32 = 12.0;
+const DESCRIPTION_SPACING: f32 = 6.0;
+const DESCRIPTION_MAX_WIDTH: f32 = 640.0;
+
+fn character_description(variant: &str) -> String {
+    variant.chars().map(|ch| {
+        let name = unicode_names2::name(ch)
+            .map(|name| name.to_string())
+            .unwrap_or_else(|| "UNNAMED CHARACTER".into());
+        format!("(U+{:04X}) {name}", ch as u32)
+    }).collect::<Vec<_>>().join(" · ")
+}
+
+fn description_bounds(description: &str, width: f32) -> iced::Size {
+    use iced::advanced::{graphics::text::Paragraph, text::{Paragraph as _, Text}};
+    Paragraph::with_text(Text {
+        content: description,
+        bounds: iced::Size::new(width, f32::INFINITY),
+        size: DESCRIPTION_SIZE.into(),
+        line_height: Default::default(),
+        font: iced::Font::DEFAULT,
+        horizontal_alignment: iced::alignment::Horizontal::Center,
+        vertical_alignment: iced::alignment::Vertical::Center,
+        shaping: text::Shaping::Advanced,
+        wrapping: text::Wrapping::Word,
+    }).min_bounds()
+}
+
+fn overlay_size_for(variants: &[String], items_per_page: usize) -> iced::Size {
+    let descriptions: Vec<_> = variants.iter().map(|v| character_description(v)).collect();
+    let longest = descriptions.iter()
+        .map(|d| description_bounds(d, f32::INFINITY).width.ceil() + PADDING)
+        .fold(PADDING, f32::max);
+    let width = window_width_for(variants, items_per_page)
+        .max(longest.min(DESCRIPTION_MAX_WIDTH));
+    // Reserve the tallest wrapped description across every page, not just the selection.
+    let description_height = descriptions.iter()
+        .map(|d| description_bounds(d, width - 20.0).height.ceil())
+        .fold(0.0, f32::max);
+    iced::Size::new(width, PICKER_ROW_HEIGHT + DESCRIPTION_SPACING + description_height)
+}
 
 fn window_width_for(variants: &[String], items_per_page: usize) -> f32 {
     if items_per_page == 0 {
@@ -115,24 +156,24 @@ pub fn set_overlay_anchor(anchor: Option<(f32, f32, f32, f32)>) {
     *OVERLAY_ANCHOR.lock().unwrap() = anchor;
 }
 
-fn overlay_position(width: f32) -> window::Position {
+fn overlay_position(size: iced::Size) -> window::Position {
     match *OVERLAY_ANCHOR.lock().unwrap() {
         Some((x, y, w, h)) => window::Position::Specific(iced::Point::new(
-            x + (w - width) / 2.0,
-            y + (h - WINDOW_HEIGHT) / 2.0,
+            x + (w - size.width) / 2.0,
+            y + (h - size.height) / 2.0,
         )),
         None => window::Position::Centered,
     }
 }
 
-fn overlay_settings(width: f32) -> window::Settings {
+fn overlay_settings(size: iced::Size) -> window::Settings {
     #[allow(unused_mut)]
     let mut settings = window::Settings {
-        size: iced::Size::new(width, WINDOW_HEIGHT),
+        size,
         decorations: false,
         transparent: true,
         level: window::Level::AlwaysOnTop,
-        position: overlay_position(width),
+        position: overlay_position(size),
         ..Default::default()
     };
     #[cfg(target_os = "linux")]
@@ -146,6 +187,72 @@ fn overlay_settings(width: f32) -> window::Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn descriptions_identify_exact_code_points_without_display_helpers() {
+        for (variant, expected) in [
+            ("ţ", "(U+0163) LATIN SMALL LETTER T WITH CEDILLA"),
+            ("Ţ", "(U+0162) LATIN CAPITAL LETTER T WITH CEDILLA"),
+            ("\u{0301}", "(U+0301) COMBINING ACUTE ACCENT"),
+            ("ꭰ", "(U+AB70) CHEROKEE SMALL LETTER A"),
+            ("𐓘", "(U+104D8) OSAGE SMALL LETTER A"),
+            ("𑪰", "(U+11AB0) CANADIAN SYLLABICS NATTILIK HI"),
+            ("אַ", "(U+05D0) HEBREW LETTER ALEF · (U+05B7) HEBREW POINT PATAH"),
+            ("°C", "(U+00B0) DEGREE SIGN · (U+0043) LATIN CAPITAL LETTER C"),
+            ("\u{e000}", "(U+E000) UNNAMED CHARACTER"),
+            ("", ""),
+        ] {
+            assert_eq!(character_description(variant), expected);
+        }
+    }
+
+    #[test]
+    fn description_follows_selection_pages_case_and_close() {
+        // An existing logical window makes update return tasks without opening a native window.
+        let mut app = App {
+            items_per_page: 1,
+            description_height: 0.0,
+            variants: Vec::new(),
+            selected_index: 0,
+            overlay_window: Some(window::Id::unique()),
+            settings_window: None,
+            languages: Vec::new(),
+            theme_choice: ThemeChoice::Dark,
+            dark: true,
+        };
+        let _ = app.update(Message::ShowOverlay(vec!["ţ".into(), "אַ".into()], 0));
+        assert_eq!(app.selected_description(), "(U+0163) LATIN SMALL LETTER T WITH CEDILLA");
+        let height = app.description_height;
+        let _ = app.update(Message::UpdateSelection(1));
+        assert_eq!(app.selected_description(), "(U+05D0) HEBREW LETTER ALEF · (U+05B7) HEBREW POINT PATAH");
+        assert_eq!(app.description_height, height);
+        let _ = app.update(Message::UpdateSelection(0));
+        // Shift replaces the variant list through ShowOverlay, preserving the selected index.
+        let _ = app.update(Message::ShowOverlay(vec!["Ţ".into(), "אַ".into()], 0));
+        assert_eq!(app.selected_description(), "(U+0162) LATIN CAPITAL LETTER T WITH CEDILLA");
+        let _ = app.update(Message::HideOverlay);
+        assert!(app.selected_description().is_empty());
+    }
+
+    #[test]
+    fn descriptions_fit_narrow_pages_and_multicodepoint_choices() {
+        let variants: Vec<_> = ["ţ", "אַ", "דזש", "𑪰", "\u{0301}", "°C"]
+            .into_iter().map(String::from).collect();
+        for page_size in [0, 1, 2, 12] {
+            let size = overlay_size_for(&variants, page_size);
+            assert!(size.width >= window_width_for(&variants, page_size));
+            assert!(size.height > PICKER_ROW_HEIGHT);
+            for variant in &variants {
+                let bounds = description_bounds(&character_description(variant), size.width - 20.0);
+                assert!(bounds.width <= size.width - 20.0);
+                assert!(bounds.height <= size.height - PICKER_ROW_HEIGHT - DESCRIPTION_SPACING);
+            }
+        }
+        let single = overlay_size_for(&["ţ".into()], 1);
+        let sequence = overlay_size_for(&["t\u{0301}\u{0308}\u{0304}".into()], 1);
+        assert!(sequence.height > single.height, "long descriptions must wrap instead of clipping");
+        assert!(sequence.width <= DESCRIPTION_MAX_WIDTH);
+    }
 
     #[test]
     fn symbol_glyphs_stay_inside_the_visible_label() {
@@ -268,14 +375,18 @@ mod tests {
             ((-1600.0, -900.0, 1200.0, 800.0), (-1100.0, -535.0)),
         ] {
             set_overlay_anchor(Some(anchor));
-            let window::Position::Specific(point) = overlay_position(200.0) else {
+            let window::Position::Specific(point) = overlay_position(iced::Size::new(200.0, 70.0)) else {
                 panic!("expected focused-window position");
             };
             assert_eq!((point.x, point.y), expected);
         }
+        let window::Position::Specific(point) = overlay_position(iced::Size::new(200.0, 110.0)) else {
+            panic!("expected focused-window position");
+        };
+        assert_eq!(point.y, -555.0, "centering must include the description height");
         // An unavailable focused window must clear the previous anchor.
         set_overlay_anchor(None);
-        assert!(matches!(overlay_position(200.0), window::Position::Centered));
+        assert!(matches!(overlay_position(iced::Size::new(200.0, 70.0)), window::Position::Centered));
     }
 }
 
@@ -295,6 +406,7 @@ pub enum Message {
 
 pub struct App {
     items_per_page: usize,
+    description_height: f32,
     variants: Vec<String>,
     selected_index: usize,
     overlay_window: Option<window::Id>,
@@ -341,6 +453,7 @@ impl App {
         (
             App {
                 items_per_page,
+                description_height: 0.0,
                 variants: Vec::new(),
                 selected_index: 0,
                 overlay_window: None,
@@ -383,19 +496,20 @@ impl App {
         match message {
             Message::ShowOverlay(variants, index) => {
                 self.selected_index = index;
-                let width = window_width_for(&variants, self.items_per_page);
+                let size = overlay_size_for(&variants, self.items_per_page);
+                self.description_height = size.height - PICKER_ROW_HEIGHT - DESCRIPTION_SPACING;
                 self.variants = variants;
 
                 if let Some(id) = self.overlay_window {
                     // Window already open, just resize and update
-                    return window::resize(id, iced::Size::new(width, WINDOW_HEIGHT));
+                    return window::resize(id, size);
                 }
 
                 #[cfg(target_os = "macos")]
                 set_overlay_anchor(crate::macos::focused_window_rect());
                 self.refresh_appearance();
 
-                let settings = overlay_settings(width);
+                let settings = overlay_settings(size);
                 log::debug!("opening overlay window at {:?}", settings.position);
                 let (id, open_task) = window::open(settings);
                 log::debug!("overlay window id {id:?}");
@@ -501,6 +615,12 @@ impl App {
         }
     }
 
+    fn selected_description(&self) -> String {
+        self.variants.get(self.selected_index)
+            .map(|variant| character_description(variant))
+            .unwrap_or_default()
+    }
+
     pub fn view(&self, window_id: window::Id) -> Element<'_, Message> {
         if self.settings_window == Some(window_id) {
             return self.settings_view();
@@ -572,7 +692,21 @@ impl App {
             );
         }
 
-        container(row(cells).spacing(CELL_SPACING).align_y(iced::Alignment::Center))
+        let description = text(self.selected_description())
+            .size(DESCRIPTION_SIZE)
+            .font(iced::Font::DEFAULT)
+            .shaping(text::Shaping::Advanced)
+            .wrapping(text::Wrapping::Word)
+            .align_x(iced::alignment::Horizontal::Center)
+            .align_y(iced::alignment::Vertical::Center)
+            .width(Length::Fill)
+            .height(self.description_height)
+            .color(chip_text);
+
+        container(column![
+            row(cells).spacing(CELL_SPACING).align_y(iced::Alignment::Center),
+            description,
+        ].spacing(DESCRIPTION_SPACING).align_x(iced::Alignment::Center))
             .padding(10)
             .center_x(Length::Fill)
             .center_y(Length::Fill)
