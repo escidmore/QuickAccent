@@ -5,6 +5,19 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **macOS: Liquid Glass picker.** The accent overlay now sits on a native
+  glass backdrop (`NSGlassEffectView` on macOS 26+, a blurred
+  `NSVisualEffectView` before that) with chips and text that follow the
+  light/dark appearance, instead of an opaque dark panel.
+- **Settings window.** The menu-bar icon gains *Settings…* (⌘,): a checkbox
+  per language and symbol set. Toggling applies immediately and rewrites only
+  the `languages = [...]` line of `config.toml`, keeping your comments and
+  other settings.
+- `QUICKACCENT_DEMO=overlay|settings` opens that window at startup without
+  taking the keyboard grab — for screenshots and UI work.
+
 ### Fixed
 
 - **macOS: picker opened on the primary display when typing on another

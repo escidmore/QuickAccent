@@ -135,6 +135,60 @@ pub fn parse_config_str(contents: &str) -> Result<Config, toml::de::Error> {
     toml::from_str(contents)
 }
 
+/// Persist a new `languages` list, touching nothing else in the file so the
+/// user's comments and other settings survive. The config watcher picks the
+/// change up like a manual edit.
+pub fn set_languages(languages: &[String]) -> std::io::Result<()> {
+    let path = config_path();
+    let current = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(_) => {
+            load_config(); // writes the commented default template
+            std::fs::read_to_string(&path).unwrap_or_default()
+        }
+    };
+    std::fs::write(&path, replace_languages(&current, languages))
+}
+
+/// Replace the `languages = [...]` assignment (single- or multi-line) in a
+/// TOML document, or append one if missing.
+fn replace_languages(toml: &str, languages: &[String]) -> String {
+    let rendered = format!(
+        "languages = [{}]",
+        languages.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>().join(", ")
+    );
+    let mut out = String::with_capacity(toml.len() + rendered.len());
+    let mut lines = toml.lines();
+    let mut replaced = false;
+    while let Some(line) = lines.next() {
+        let key = line.trim_start();
+        if !replaced && key.starts_with("languages") && key[9..].trim_start().starts_with('=') {
+            // Skip the rest of a multi-line array.
+            let mut rest = &line[line.find('=').unwrap() + 1..];
+            while !rest.contains(']') {
+                match lines.next() {
+                    Some(l) => rest = l,
+                    None => break,
+                }
+            }
+            out.push_str(&rendered);
+            out.push('\n');
+            replaced = true;
+        } else {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    if !replaced {
+        if !out.is_empty() && !out.ends_with("\n\n") {
+            out.push('\n');
+        }
+        out.push_str(&rendered);
+        out.push('\n');
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,5 +245,33 @@ mod tests {
     #[test]
     fn invalid_toml_errors() {
         assert!(parse_config_str("languages = [").is_err());
+    }
+
+    #[test]
+    fn replace_languages_keeps_everything_else() {
+        let langs = ["German".to_string(), "Spanish".to_string()];
+        let doc = "# QuickAccent Configuration\n# comment\n\nlanguages = [\"French\"]\n\n# hold\n# hold_delay_ms = 250\ninput_time_ms = 100\n";
+        let out = replace_languages(doc, &langs);
+        assert_eq!(
+            out,
+            "# QuickAccent Configuration\n# comment\n\nlanguages = [\"German\", \"Spanish\"]\n\n# hold\n# hold_delay_ms = 250\ninput_time_ms = 100\n"
+        );
+        let parsed = parse_config_str(&out).unwrap();
+        assert_eq!(parsed.languages, langs);
+        assert_eq!(parsed.input_time_ms, 100);
+    }
+
+    #[test]
+    fn replace_languages_handles_multiline_missing_and_lookalikes() {
+        let langs = ["Welsh".to_string()];
+        let multi = "languages = [\n  \"French\",\n  \"German\",\n]\nhold_delay_ms = 300\n";
+        assert_eq!(replace_languages(multi, &langs), "languages = [\"Welsh\"]\nhold_delay_ms = 300\n");
+        // Commented-out or similarly named keys are left alone; a missing key is appended.
+        let none = "# languages = [\"French\"]\nlanguages_extra = 1\n";
+        assert_eq!(
+            replace_languages(none, &langs),
+            "# languages = [\"French\"]\nlanguages_extra = 1\n\nlanguages = [\"Welsh\"]\n"
+        );
+        assert_eq!(replace_languages("", &[]), "languages = []\n");
     }
 }

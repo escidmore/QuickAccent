@@ -1,14 +1,40 @@
 use iced::futures::SinkExt;
-use iced::widget::{container, row, text};
+use iced::widget::{checkbox, column, container, row, scrollable, text};
 use iced::window;
-use iced::{color, Element, Length, Subscription, Task, Theme};
-use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc::UnboundedReceiver;
+use iced::{color, Color, Element, Length, Subscription, Task, Theme};
+use std::sync::{Arc, Mutex, OnceLock};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use crate::state_machine::GrabEvent;
 
-static GRAB_RX: std::sync::OnceLock<Arc<Mutex<Option<UnboundedReceiver<GrabEvent>>>>> =
-    std::sync::OnceLock::new();
+static GRAB_RX: OnceLock<Arc<Mutex<Option<UnboundedReceiver<GrabEvent>>>>> = OnceLock::new();
+
+/// Requests from native UI (the status-bar menu) into the iced app.
+#[derive(Debug, Clone, Copy)]
+pub enum UiEvent {
+    OpenSettings,
+}
+
+struct UiChannel {
+    tx: UnboundedSender<UiEvent>,
+    rx: Mutex<Option<UnboundedReceiver<UiEvent>>>,
+}
+
+fn ui_channel() -> &'static UiChannel {
+    static CHANNEL: OnceLock<UiChannel> = OnceLock::new();
+    CHANNEL.get_or_init(|| {
+        let (tx, rx) = unbounded_channel();
+        UiChannel { tx, rx: Mutex::new(Some(rx)) }
+    })
+}
+
+/// Hand a native UI event to the app. Safe from any thread, before or after
+/// the app is running.
+pub fn request(event: UiEvent) {
+    let _ = ui_channel().tx.send(event);
+}
+
+const SETTINGS_COLUMNS: usize = 3;
 
 const TEXT_SIZE: f32 = 28.0;
 const CELL_PADDING: f32 = 14.0;
@@ -147,24 +173,51 @@ pub enum Message {
     HideOverlay,
     InjectChar,
     WindowOpened(window::Id),
+    WindowClosed(window::Id),
+    OpenSettings,
+    ToggleLanguage(String, bool),
+    Noop,
 }
 
 pub struct App {
     variants: Vec<String>,
     selected_index: usize,
     overlay_window: Option<window::Id>,
+    settings_window: Option<window::Id>,
+    /// Enabled languages / symbol sets, in config order.
+    languages: Vec<String>,
+    /// System appearance sampled when the picker opens (macOS glass adapts to
+    /// what is behind it; our text has to follow).
+    dark: bool,
 }
 
 impl App {
     pub fn new(grab_rx: Arc<Mutex<Option<UnboundedReceiver<GrabEvent>>>>) -> (Self, Task<Message>) {
         GRAB_RX.set(grab_rx).ok();
+        // Development aid: QUICKACCENT_DEMO=overlay|settings opens that window
+        // at startup without needing the keyboard grab (or its permissions).
+        let demo = std::env::var("QUICKACCENT_DEMO");
+        if let Ok(which) = &demo {
+            eprintln!("[QuickAccent] demo mode: {which}");
+        }
+        let boot = match demo.as_deref() {
+            Ok("overlay") => Task::done(Message::ShowOverlay(
+                ["é", "è", "ê", "ë", "ē", "ė"].map(String::from).to_vec(),
+                1,
+            )),
+            Ok("settings") => Task::done(Message::OpenSettings),
+            _ => Task::none(),
+        };
         (
             App {
                 variants: Vec::new(),
                 selected_index: 0,
                 overlay_window: None,
+                settings_window: None,
+                languages: Vec::new(),
+                dark: false,
             },
-            Task::none(),
+            boot,
         )
     }
 
@@ -181,10 +234,15 @@ impl App {
                 }
 
                 #[cfg(target_os = "macos")]
-                set_overlay_anchor(crate::macos::focused_window_rect());
+                {
+                    set_overlay_anchor(crate::macos::focused_window_rect());
+                    self.dark = crate::macos::is_dark_appearance();
+                }
 
                 let settings = overlay_settings(width);
+                log::debug!("opening overlay window at {:?}", settings.position);
                 let (id, open_task) = window::open(settings);
+                log::debug!("overlay window id {id:?}");
                 self.overlay_window = Some(id);
                 open_task.map(Message::WindowOpened)
             }
@@ -201,17 +259,100 @@ impl App {
                 }
                 Task::none()
             }
-            Message::WindowOpened(_id) => Task::none(),
+            Message::WindowOpened(id) => {
+                log::debug!("window opened {id:?}");
+                #[cfg(target_os = "macos")]
+                if self.overlay_window == Some(id) {
+                    // Runs on the event-loop thread before the first frame is
+                    // shown, so the glass is there from the start.
+                    return window::run_with_handle(id, |handle| {
+                        use iced::window::raw_window_handle::RawWindowHandle;
+                        if let RawWindowHandle::AppKit(appkit) = handle.as_raw() {
+                            crate::macos::attach_glass_backdrop(appkit.ns_view.as_ptr());
+                        }
+                    })
+                    .map(|_| Message::Noop);
+                }
+                if self.settings_window == Some(id) {
+                    #[cfg(target_os = "macos")]
+                    crate::macos::activate_app();
+                    return window::gain_focus(id);
+                }
+                Task::none()
+            }
+            Message::WindowClosed(id) => {
+                if self.settings_window == Some(id) {
+                    self.settings_window = None;
+                }
+                if self.overlay_window == Some(id) {
+                    self.overlay_window = None;
+                    self.variants.clear();
+                }
+                Task::none()
+            }
+            Message::OpenSettings => {
+                if let Some(id) = self.settings_window {
+                    #[cfg(target_os = "macos")]
+                    crate::macos::activate_app();
+                    return window::gain_focus(id);
+                }
+                self.languages = crate::config::read_config()
+                    .map(|c| c.languages)
+                    .unwrap_or_else(|| crate::config::Config::default().languages);
+                #[cfg(target_os = "macos")]
+                {
+                    self.dark = crate::macos::is_dark_appearance();
+                }
+                let (id, open_task) = window::open(window::Settings {
+                    size: iced::Size::new(560.0, 640.0),
+                    min_size: Some(iced::Size::new(420.0, 360.0)),
+                    position: window::Position::Centered,
+                    level: window::Level::Normal,
+                    exit_on_close_request: true,
+                    ..Default::default()
+                });
+                self.settings_window = Some(id);
+                open_task.map(Message::WindowOpened)
+            }
+            Message::ToggleLanguage(name, enabled) => {
+                if enabled {
+                    if !self.languages.contains(&name) {
+                        self.languages.push(name);
+                    }
+                } else {
+                    self.languages.retain(|l| *l != name);
+                }
+                // Apply now; the config watcher will reload once more when the
+                // file lands, which is harmless.
+                crate::mappings::reload(&self.languages);
+                if let Err(e) = crate::config::set_languages(&self.languages) {
+                    eprintln!("[QuickAccent] Failed to save languages: {e}");
+                }
+                Task::none()
+            }
+            Message::Noop => Task::none(),
         }
     }
 
     pub fn view(&self, window_id: window::Id) -> Element<'_, Message> {
+        if self.settings_window == Some(window_id) {
+            return self.settings_view();
+        }
         if self.overlay_window != Some(window_id) || self.variants.is_empty() {
             return container(text(""))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into();
         }
+
+        // macOS: chips float on the glass backdrop, tinted for the current
+        // appearance. Elsewhere: the opaque dark panel.
+        let glass = cfg!(target_os = "macos");
+        let (chip, chip_text, selected) = match (glass, self.dark) {
+            (true, true) => (color!(0xFFFFFF, 0.16), color!(0xFFFFFF), color!(0x0A84FF)),
+            (true, false) => (color!(0x000000, 0.08), color!(0x1C1C1E), color!(0x007AFF)),
+            (false, _) => (color!(0x3C3C3C), color!(0xCCCCCC), color!(0x4A90D9)),
+        };
 
         let cells: Vec<Element<Message>> = self
             .variants
@@ -227,28 +368,18 @@ impl App {
 
                 let cell = container(label)
                     .padding([8.0, CELL_PADDING])
-                    .style(move |_theme: &Theme| {
-                        if is_selected {
-                            container::Style {
-                                background: Some(iced::Background::Color(color!(0x4A90D9))),
-                                border: iced::Border {
-                                    radius: 6.0.into(),
-                                    ..Default::default()
-                                },
-                                text_color: Some(color!(0xFFFFFF)),
-                                ..Default::default()
-                            }
+                    .style(move |_theme: &Theme| container::Style {
+                        background: Some(iced::Background::Color(if is_selected {
+                            selected
                         } else {
-                            container::Style {
-                                background: Some(iced::Background::Color(color!(0x3C3C3C))),
-                                border: iced::Border {
-                                    radius: 6.0.into(),
-                                    ..Default::default()
-                                },
-                                text_color: Some(color!(0xCCCCCC)),
-                                ..Default::default()
-                            }
-                        }
+                            chip
+                        })),
+                        border: iced::Border {
+                            radius: 8.0.into(),
+                            ..Default::default()
+                        },
+                        text_color: Some(if is_selected { color!(0xFFFFFF) } else { chip_text }),
+                        ..Default::default()
                     });
 
                 cell.into()
@@ -259,8 +390,8 @@ impl App {
             .padding(10)
             .center_x(Length::Fill)
             .center_y(Length::Fill)
-            .style(|_theme: &Theme| container::Style {
-                background: Some(iced::Background::Color(color!(0x2D2D2D, 0.95))),
+            .style(move |_theme: &Theme| container::Style {
+                background: (!glass).then_some(iced::Background::Color(color!(0x2D2D2D, 0.95))),
                 border: iced::Border {
                     radius: 12.0.into(),
                     ..Default::default()
@@ -270,13 +401,102 @@ impl App {
             .into()
     }
 
-    pub fn subscription(&self) -> Subscription<Message> {
-        Subscription::run(grab_subscription)
+    fn settings_view(&self) -> Element<'_, Message> {
+        let section = |title: &str, names: &'static [&'static str]| -> Element<'_, Message> {
+            let rows = names.chunks(SETTINGS_COLUMNS).map(|chunk| {
+                let mut cells: Vec<Element<Message>> = chunk
+                    .iter()
+                    .map(|name| {
+                        let enabled = self.languages.iter().any(|l| l == name);
+                        checkbox(*name, enabled)
+                            .on_toggle(move |on| Message::ToggleLanguage(name.to_string(), on))
+                            .width(Length::Fill)
+                            .into()
+                    })
+                    .collect();
+                // Keep the grid aligned on a short last row.
+                while cells.len() < SETTINGS_COLUMNS {
+                    cells.push(iced::widget::Space::with_width(Length::Fill).into());
+                }
+                row(cells).spacing(8).into()
+            });
+            column(
+                std::iter::once(text(title.to_string()).size(15).into())
+                    .chain(rows)
+                    .collect::<Vec<Element<Message>>>(),
+            )
+            .spacing(8)
+            .into()
+        };
+
+        let body = column(vec![
+            text("QuickAccent").size(22).into(),
+            text("Hold a letter, press Space, pick a variant, release the letter.")
+                .size(13)
+                .into(),
+            section("Languages", crate::mappings::LANGUAGES),
+            section("Symbol sets", crate::mappings::SYMBOL_SETS),
+            text(format!(
+                "Changes apply immediately and are saved to {}",
+                crate::config::config_path().display()
+            ))
+            .size(11)
+            .into(),
+        ])
+        .spacing(18)
+        .padding(24);
+
+        container(scrollable(body))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(|theme: &Theme| container::Style {
+                background: Some(iced::Background::Color(theme.palette().background)),
+                ..Default::default()
+            })
+            .into()
     }
 
-    pub fn theme(&self, _window: window::Id) -> Theme {
-        Theme::CatppuccinMocha
+    pub fn subscription(&self) -> Subscription<Message> {
+        Subscription::batch([
+            Subscription::run(grab_subscription),
+            Subscription::run(ui_subscription),
+            window::close_events().map(Message::WindowClosed),
+        ])
     }
+
+    pub fn theme(&self, window_id: window::Id) -> Theme {
+        if self.settings_window == Some(window_id) {
+            if self.dark { Theme::Dark } else { Theme::Light }
+        } else {
+            Theme::CatppuccinMocha
+        }
+    }
+
+    /// Window backgrounds. On macOS the picker window is see-through so the
+    /// glass backdrop shows; the settings window paints its own background.
+    pub fn style(&self, theme: &Theme) -> iced::daemon::Appearance {
+        iced::daemon::Appearance {
+            background_color: if cfg!(target_os = "macos") {
+                Color::TRANSPARENT
+            } else {
+                theme.palette().background
+            },
+            text_color: theme.palette().text,
+        }
+    }
+}
+
+fn ui_subscription() -> impl iced::futures::Stream<Item = Message> {
+    iced::stream::channel(8, |mut output| async move {
+        let mut rx = ui_channel().rx.lock().unwrap().take().expect("ui channel already taken");
+        while let Some(event) = rx.recv().await {
+            let msg = match event {
+                UiEvent::OpenSettings => Message::OpenSettings,
+            };
+            output.send(msg).await.ok();
+        }
+        std::future::pending::<()>().await;
+    })
 }
 
 fn grab_subscription() -> impl iced::futures::Stream<Item = Message> {

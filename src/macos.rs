@@ -1,12 +1,112 @@
 use cocoa::appkit::{NSApp, NSApplication, NSImage, NSMenu, NSMenuItem, NSStatusBar};
 use cocoa::base::{id, nil, selector};
-use cocoa::foundation::NSString;
+use cocoa::foundation::{NSRect, NSString};
 use core_foundation::base::{CFType, CFTypeRef, TCFType};
 use core_foundation::string::{CFString, CFStringRef};
 use core_graphics::geometry::{CGPoint, CGSize};
-use objc::runtime::Class;
-use objc::{msg_send, sel, sel_impl};
+use objc::declare::ClassDecl;
+use objc::runtime::{Class, Object, Sel};
+use objc::{class, msg_send, sel, sel_impl};
 use std::ffi::c_void;
+use std::sync::OnceLock;
+
+/// Corner radius of the picker's glass backdrop, in points.
+const OVERLAY_CORNER_RADIUS: f64 = 14.0;
+
+/// Put a Liquid Glass backdrop (macOS 26+ `NSGlassEffectView`; a blur
+/// `NSVisualEffectView` before that) under the picker's content. `ns_view` is
+/// winit's content view and must stay the window's `contentView` — winit casts
+/// it back to its own type — so the backdrop is added as a sibling ordered
+/// below it and iced paints a transparent background over it.
+pub fn attach_glass_backdrop(ns_view: *mut c_void) {
+    unsafe {
+        let view = ns_view as id;
+        let window: id = msg_send![view, window];
+        log::debug!("attaching glass backdrop: view={view:?} window={window:?}");
+        if window == nil {
+            return;
+        }
+        let _: () = msg_send![window, setOpaque: false];
+        let clear: id = msg_send![class!(NSColor), clearColor];
+        let _: () = msg_send![window, setBackgroundColor: clear];
+        // The Metal layer must not fill its transparent pixels.
+        let layer: id = msg_send![view, layer];
+        if layer != nil {
+            let _: () = msg_send![layer, setOpaque: false];
+        }
+
+        let frame: NSRect = msg_send![view, frame];
+        let backdrop: id = match Class::get("NSGlassEffectView") {
+            Some(glass) => {
+                let v: id = msg_send![glass, alloc];
+                let v: id = msg_send![v, initWithFrame: frame];
+                let _: () = msg_send![v, setCornerRadius: OVERLAY_CORNER_RADIUS];
+                v
+            }
+            None => {
+                let v: id = msg_send![class!(NSVisualEffectView), alloc];
+                let v: id = msg_send![v, initWithFrame: frame];
+                let _: () = msg_send![v, setMaterial: 13i64]; // NSVisualEffectMaterialHUDWindow
+                let _: () = msg_send![v, setBlendingMode: 0i64]; // behindWindow
+                let _: () = msg_send![v, setState: 1i64]; // active
+                let _: () = msg_send![v, setWantsLayer: true];
+                let layer: id = msg_send![v, layer];
+                let _: () = msg_send![layer, setCornerRadius: OVERLAY_CORNER_RADIUS];
+                let _: () = msg_send![layer, setMasksToBounds: true];
+                v
+            }
+        };
+        let _: () = msg_send![backdrop, setAutoresizingMask: 18u64]; // width | height sizable
+        let superview: id = msg_send![view, superview];
+        if superview != nil {
+            let _: () = msg_send![superview, addSubview: backdrop positioned: -1i64 relativeTo: view]; // NSWindowBelow
+        }
+    }
+}
+
+/// Whether the system appearance is currently dark, so the picker's text and
+/// chips stay readable on glass that adapts to whatever is behind it.
+pub fn is_dark_appearance() -> bool {
+    unsafe {
+        let appearance: id = msg_send![NSApp(), effectiveAppearance];
+        if appearance == nil {
+            return false;
+        }
+        let name: id = msg_send![appearance, name];
+        if name == nil {
+            return false;
+        }
+        let cstr: *const std::os::raw::c_char = msg_send![name, UTF8String];
+        !cstr.is_null() && std::ffi::CStr::from_ptr(cstr).to_string_lossy().contains("Dark")
+    }
+}
+
+/// Bring the app forward so a freshly opened settings window is key. An
+/// accessory app (no Dock icon) is never activated by macOS on its own.
+pub fn activate_app() {
+    unsafe {
+        let _: () = msg_send![NSApp(), activateIgnoringOtherApps: true];
+    }
+}
+
+/// Target object for the status-bar menu: `openSettings:` hands the click to
+/// the iced app. Registered once; the instance lives as long as the menu.
+fn menu_target() -> id {
+    static TARGET: OnceLock<usize> = OnceLock::new();
+    *TARGET.get_or_init(|| unsafe {
+        extern "C" fn open_settings(_this: &Object, _sel: Sel, _sender: id) {
+            crate::app::request(crate::app::UiEvent::OpenSettings);
+        }
+        let mut decl = ClassDecl::new("QAMenuTarget", class!(NSObject)).expect("QAMenuTarget");
+        decl.add_method(
+            sel!(openSettings:),
+            open_settings as extern "C" fn(&Object, Sel, id),
+        );
+        let cls = decl.register();
+        let obj: id = msg_send![cls, new];
+        obj as usize
+    }) as id
+}
 
 #[link(name = "ApplicationServices", kind = "framework")]
 extern "C" {
@@ -137,8 +237,19 @@ pub fn setup_status_item() {
             let _: () = msg_send![button, setTitle: fallback];
         }
 
-        // Menu with Quit
+        // Menu: Settings… / Quit
         let menu = NSMenu::new(nil);
+        let settings_title = NSString::alloc(nil).init_str("Settings\u{2026}");
+        let comma = NSString::alloc(nil).init_str(",");
+        let settings_item: id = NSMenuItem::alloc(nil).initWithTitle_action_keyEquivalent_(
+            settings_title,
+            sel!(openSettings:),
+            comma,
+        );
+        let _: () = msg_send![settings_item, setTarget: menu_target()];
+        menu.addItem_(settings_item);
+        menu.addItem_(NSMenuItem::separatorItem(nil));
+
         let quit_title = NSString::alloc(nil).init_str("Quit QuickAccent");
         let q = NSString::alloc(nil).init_str("q");
         let quit_item: id = NSMenuItem::alloc(nil).initWithTitle_action_keyEquivalent_(
