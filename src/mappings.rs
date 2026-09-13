@@ -96,12 +96,9 @@ fn get_language_data(name: &str) -> Option<LangData> {
     match name {
         "Cherokee" => Some(script_mappings::CHEROKEE),
         "Osage" => Some(script_mappings::OSAGE),
-        "CanadianAboriginalSyllabics" | "Unified Canadian Aboriginal Syllabics"
-        | "Unified_Canadian_Aboriginal_Syllabics" => Some(script_mappings::CANADIAN),
-        "CanadianAboriginalSyllabicsExtended" | "Unified Canadian Aboriginal Syllabics Extended"
-        | "Unified_Canadian_Aboriginal_Syllabics_Extended" => Some(script_mappings::CANADIAN_EXTENDED),
-        "CanadianAboriginalSyllabicsExtendedA" | "Unified Canadian Aboriginal Syllabics Extended-A"
-        | "Unified_Canadian_Aboriginal_Syllabics_Extended_A" => Some(script_mappings::CANADIAN_EXTENDED_A),
+        "CanadianAboriginalSyllabics" => Some(script_mappings::CANADIAN),
+        "CanadianAboriginalSyllabicsExtended" => Some(script_mappings::CANADIAN_EXTENDED),
+        "CanadianAboriginalSyllabicsExtendedA" => Some(script_mappings::CANADIAN_EXTENDED_A),
         // PowerToys PowerAccent.Common/CharacterMappings.cs, MIT licensed.
         // Copyright (c) Microsoft Corporation. See THIRD_PARTY_NOTICES.md.
         "Special" => Some(&[

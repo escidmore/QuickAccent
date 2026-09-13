@@ -153,14 +153,6 @@ Coverage is pinned to [Unicode 17.0.0](https://www.unicode.org/Public/17.0.0/ucd
 | CanadianAboriginalSyllabicsExtended | 70 | Every assigned character at U+18B0–18F5; U+18F6–18FF are unassigned |
 | CanadianAboriginalSyllabicsExtendedA | 16 | Every assigned character at U+11AB0–11ABF |
 
-The Canadian sets also accept their full Unicode block names in configuration:
-`"Unified Canadian Aboriginal Syllabics"`,
-`"Unified Canadian Aboriginal Syllabics Extended"`, and
-`"Unified Canadian Aboriginal Syllabics Extended-A"`.
-Underscore aliases are supported too: `Unified_Canadian_Aboriginal_Syllabics`,
-`Unified_Canadian_Aboriginal_Syllabics_Extended`, and
-`Unified_Canadian_Aboriginal_Syllabics_Extended_A`.
-
 ### Finding a character
 
 Use the **first letter of the syllable or letter name in Unicode**, ignoring

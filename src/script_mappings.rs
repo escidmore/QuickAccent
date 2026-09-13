@@ -303,37 +303,16 @@ mod tests {
     }
 
     #[test]
-    fn script_sets_are_opt_in_and_unicode_block_aliases_deduplicate() {
+    fn script_sets_are_opt_in_and_deduplicate() {
         let _guard = test_guard();
         init(&["French".into()]);
         assert!(!get_variants(MappingKey::A, false).contains(&"ꭰ".into()));
-        for (canonical, aliases) in [
-            (
-                "CanadianAboriginalSyllabics",
-                [
-                    "Unified Canadian Aboriginal Syllabics",
-                    "Unified_Canadian_Aboriginal_Syllabics",
-                ],
-            ),
-            (
-                "CanadianAboriginalSyllabicsExtended",
-                [
-                    "Unified Canadian Aboriginal Syllabics Extended",
-                    "Unified_Canadian_Aboriginal_Syllabics_Extended",
-                ],
-            ),
-            (
-                "CanadianAboriginalSyllabicsExtendedA",
-                [
-                    "Unified Canadian Aboriginal Syllabics Extended-A",
-                    "Unified_Canadian_Aboriginal_Syllabics_Extended_A",
-                ],
-            ),
+        for canonical in [
+            "CanadianAboriginalSyllabics",
+            "CanadianAboriginalSyllabicsExtended",
+            "CanadianAboriginalSyllabicsExtendedA",
         ] {
-            for alias in aliases {
-                assert_eq!(get_language_data(canonical), get_language_data(alias));
-            }
-            init(&[canonical.into(), aliases[0].into(), aliases[1].into()]);
+            init(&[canonical.into(), canonical.into()]);
             for &(key, choices) in get_language_data(canonical).unwrap() {
                 assert_eq!(get_variants(key, false), choices);
             }
