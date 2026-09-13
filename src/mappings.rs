@@ -5,6 +5,8 @@ use std::sync::RwLock;
 pub enum MappingKey {
     A, B, C, D, E, F, G, H, I, J, K, L, M,
     N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+    Num0, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9,
+    Comma, Period, Minus, Plus, Slash, Backslash, Divide, Multiply, Quote,
 }
 
 type LangData = &'static [(MappingKey, &'static [&'static str])];
@@ -57,7 +59,7 @@ pub fn get_variants(key: MappingKey, uppercase: bool) -> Vec<String> {
     match map.get(&key) {
         Some(chars) if !chars.is_empty() => {
             if uppercase {
-                chars.iter().map(|c| c.chars().next().unwrap().to_uppercase().collect()).collect()
+                chars.iter().map(|c| c.to_uppercase()).collect()
             } else {
                 chars.clone()
             }
@@ -89,6 +91,104 @@ fn build_map(languages: &[String]) -> HashMap<MappingKey, Vec<String>> {
 
 fn get_language_data(name: &str) -> Option<LangData> {
     match name {
+        // PowerToys PowerAccent.Common/CharacterMappings.cs, MIT licensed.
+        // Copyright (c) Microsoft Corporation. See THIRD_PARTY_NOTICES.md.
+        "Special" => Some(&[
+            (MappingKey::Num0, &["₀", "⁰", "°", "↉", "₎", "⁾"]),
+            (MappingKey::Num1, &["₁", "¹", "½", "⅓", "¼", "⅕", "⅙", "⅐", "⅛", "⅑", "⅒"]),
+            (MappingKey::Num2, &["₂", "²", "⅔", "⅖"]),
+            (MappingKey::Num3, &["₃", "³", "¾", "⅗", "⅜"]),
+            (MappingKey::Num4, &["₄", "⁴", "⅘"]),
+            (MappingKey::Num5, &["₅", "⁵", "⅚", "⅝"]),
+            (MappingKey::Num6, &["₆", "⁶"]),
+            (MappingKey::Num7, &["₇", "⁷", "⅞"]),
+            (MappingKey::Num8, &["₈", "⁸", "∞"]),
+            (MappingKey::Num9, &["₉", "⁹", "₍", "⁽"]),
+            (MappingKey::A, &["ȧ", "ǽ", "∀", "ᵃ", "ₐ"]),
+            (MappingKey::B, &["ḃ", "ᵇ"]),
+            (MappingKey::C, &["ċ", "°C", "©", "ℂ", "∁", "ᶜ"]),
+            (MappingKey::D, &["ḍ", "ḋ", "∂", "ᵈ"]),
+            (MappingKey::E, &["∈", "∃", "∄", "∉", "ĕ", "ᵉ", "ₑ"]),
+            (MappingKey::F, &["ḟ", "°F", "ᶠ"]),
+            (MappingKey::G, &["ģ", "ǧ", "ġ", "ĝ", "ǥ", "ᵍ"]),
+            (MappingKey::H, &["ḣ", "ĥ", "ħ", "ʰ", "ₕ"]),
+            (MappingKey::I, &["ⁱ", "ᵢ"]),
+            (MappingKey::J, &["ĵ", "ʲ", "ⱼ"]),
+            (MappingKey::K, &["ķ", "ǩ", "ᵏ", "ₖ"]),
+            (MappingKey::L, &["ļ", "₺", "ˡ", "ₗ"]),
+            (MappingKey::M, &["ṁ", "ᵐ", "ₘ"]),
+            (MappingKey::N, &["ņ", "ṅ", "ⁿ", "ℕ", "№", "ₙ"]),
+            (MappingKey::O, &["ȯ", "∅", "⌀", "ᵒ", "ₒ"]),
+            (MappingKey::P, &["ṗ", "℗", "∏", "¶", "ᵖ", "ₚ", "‰", "‱"]),
+            (MappingKey::Q, &["ℚ", "𐞥"]),
+            (MappingKey::R, &["ṙ", "®", "ℝ", "ʳ", "ᵣ"]),
+            (MappingKey::S, &["ṡ", "§", "∑", "∫", "ˢ", "ₛ"]),
+            (MappingKey::T, &["ţ", "ṫ", "ŧ", "™", "ᵗ", "ₜ"]),
+            (MappingKey::U, &["ŭ", "ᵘ", "ᵤ"]),
+            (MappingKey::V, &["V̇", "ᵛ", "ᵥ"]),
+            (MappingKey::W, &["ẇ", "ʷ"]),
+            (MappingKey::X, &["ẋ", "×", "ˣ", "ₓ"]),
+            (MappingKey::Y, &["ẏ", "ꝡ", "ʸ"]),
+            (MappingKey::Z, &["ʒ", "ǯ", "ℤ", "ᶻ"]),
+            (MappingKey::Comma, &["∙", "₋", "⁻", "–", "√", "‟", "⟪", "⟫", "‛", "⟨", "⟩", "″", "‴", "⁗"]),
+            (MappingKey::Period, &["…", "⁝", "\u{0300}", "\u{0301}", "\u{0302}", "\u{0303}", "\u{0304}", "\u{0308}", "\u{030b}", "\u{030c}"]),
+            (MappingKey::Minus, &["~", "‐", "‑", "‒", "–", "—", "―", "⁓", "−", "⸺", "⸻", "∓", "₋", "⁻"]),
+            (MappingKey::Slash, &["÷", "√", "‽", "⸘"]),
+            (MappingKey::Divide, &["÷", "√"]),
+            (MappingKey::Multiply, &["×", "⋅", "ˣ", "ₓ"]),
+            (MappingKey::Plus, &["≤", "≥", "≠", "≈", "≙", "⊕", "⊗", "±", "≅", "≡", "₊", "⁺", "₌", "⁼"]),
+            (MappingKey::Backslash, &["`", "~"]),
+        ]),
+        "Currency" => Some(&[
+            (MappingKey::B, &["฿", "в"]),
+            (MappingKey::C, &["¢", "₡", "č"]),
+            (MappingKey::D, &["₫"]),
+            (MappingKey::E, &["€"]),
+            (MappingKey::F, &["ƒ"]),
+            (MappingKey::H, &["₴"]),
+            (MappingKey::K, &["₭"]),
+            (MappingKey::L, &["ł"]),
+            (MappingKey::N, &["л"]),
+            (MappingKey::M, &["₼"]),
+            (MappingKey::P, &["£", "₽", "₱"]),
+            (MappingKey::R, &["₹", "៛", "﷼"]),
+            (MappingKey::S, &["$", "₪"]),
+            (MappingKey::T, &["₮", "₺", "₸"]),
+            (MappingKey::W, &["₩"]),
+            (MappingKey::Y, &["¥"]),
+        ]),
+        "Typography" => Some(&[
+            (MappingKey::Quote, &["‘", "’", "“", "”", "„", "‚", "«", "»", "‹", "›"]),
+            (MappingKey::Period, &["•", "◦", "▪"]),
+            (MappingKey::T, &["†", "‡", "※"]),
+            (MappingKey::V, &["✓", "✔"]),
+            (MappingKey::X, &["✗", "✘"]),
+        ]),
+        "Arrows" => Some(&[
+            (MappingKey::Minus, &["←", "→", "↑", "↓", "↔", "↕", "↗", "↘", "↙", "↖"]),
+            (MappingKey::Plus, &["⇒", "⇐", "⇔"]),
+        ]),
+        "Math" => Some(&[
+            (MappingKey::Plus, &["≔", "≝", "≟", "≢", "∝"]),
+            (MappingKey::Comma, &["≪", "≲", "⊂", "⊆"]),
+            (MappingKey::Period, &["≫", "≳", "⊃", "⊇"]),
+            (MappingKey::I, &["∩"]),
+            (MappingKey::U, &["∪"]),
+            (MappingKey::A, &["∧"]),
+            (MappingKey::O, &["∨"]),
+            (MappingKey::N, &["¬"]),
+            (MappingKey::T, &["∴", "∵"]),
+        ]),
+        "CurrencyExtended" => Some(&[
+            (MappingKey::A, &["؋"]),
+            (MappingKey::B, &["₿"]),
+            (MappingKey::C, &["₵", "¤"]),
+            (MappingKey::D, &["֏"]),
+            (MappingKey::G, &["₲"]),
+            (MappingKey::L, &["₾"]),
+            (MappingKey::N, &["₦"]),
+            (MappingKey::R, &["₨"]),
+        ]),
         "Catalan" => Some(&[
             (MappingKey::A, &["à", "á"]),
             (MappingKey::C, &["ç"]),
@@ -449,6 +549,67 @@ fn get_language_data(name: &str) -> Option<LangData> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn optional_extensions_have_complete_case_stable_choices() {
+        let _guard = test_guard();
+        init(&["Special".into(), "Currency".into()]);
+        assert!(get_variants(MappingKey::Quote, false).is_empty());
+        for (name, expected) in [
+            ("Typography", "‘’“”„‚«»‹›•◦▪†‡※✓✔✗✘"),
+            ("Arrows", "←→↑↓↔↕↗↘↙↖⇒⇐⇔"),
+            ("Math", "≔≝≟≢∝≪≲⊂⊆≫≳⊃⊇∩∪∧∨¬∴∵"),
+            ("CurrencyExtended", "؋₿₵¤֏₲₾₦₨"),
+        ] {
+            init(&[name.into()]);
+            let mut actual = std::collections::HashSet::new();
+            for &(key, _) in get_language_data(name).unwrap() {
+                let choices = get_variants(key, false);
+                assert_eq!(choices, get_variants(key, true), "{name}: {key:?}");
+                for choice in choices {
+                    assert_eq!(choice.chars().count(), 1);
+                    assert!(actual.insert(choice.chars().next().unwrap()));
+                }
+            }
+            assert_eq!(actual, expected.chars().collect(), "{name}");
+        }
+        init(&["Typography".into(), "Special".into()]);
+        assert_eq!(get_variants(MappingKey::Quote, false)[..4], ["‘", "’", "“", "”"]);
+    }
+
+    #[test]
+    fn extended_sets_preserve_symbols_and_sequences() {
+        let _guard = test_guard();
+        init(&["Special".into(), "Currency".into()]);
+        for (key, expected) in [
+            (MappingKey::Period, "…"), (MappingKey::Minus, "–"),
+            (MappingKey::Minus, "—"), (MappingKey::Minus, "⸺"),
+            (MappingKey::Minus, "⸻"), (MappingKey::Plus, "≥"),
+            (MappingKey::Num1, "½"), (MappingKey::Num8, "∞"),
+            (MappingKey::C, "°C"), (MappingKey::F, "°F"),
+            (MappingKey::E, "€"), (MappingKey::S, "₪"),
+            (MappingKey::V, "V\u{0307}"),
+        ] {
+            for uppercase in [false, true] {
+                assert!(get_variants(key, uppercase).iter().any(|s| s == expected), "{key:?}: {expected}");
+            }
+        }
+
+        init(&["German".into()]);
+        assert!(get_variants(MappingKey::S, true).contains(&"SS".into()));
+    }
+
+    #[test]
+    fn extended_sets_are_opt_in_and_merge_in_config_order() {
+        let _guard = test_guard();
+        init(&["French".into()]);
+        assert!(get_variants(MappingKey::Minus, false).is_empty());
+        init(&["Typography".into(), "Special".into(), "Typography".into()]);
+        let variants = get_variants(MappingKey::Period, false);
+        assert_eq!(variants[0], "•");
+        assert_eq!(variants.iter().filter(|s| *s == "•").count(), 1);
+        assert!(variants.contains(&"…".into()));
+    }
 
     #[test]
     fn french_e_has_accents() {

@@ -80,6 +80,25 @@ mod platform {
             40 => KeyInput::Letter(MappingKey::K),
             45 => KeyInput::Letter(MappingKey::N),
             46 => KeyInput::Letter(MappingKey::M),
+            18 => KeyInput::Letter(MappingKey::Num1),
+            19 => KeyInput::Letter(MappingKey::Num2),
+            20 => KeyInput::Letter(MappingKey::Num3),
+            21 => KeyInput::Letter(MappingKey::Num4),
+            23 => KeyInput::Letter(MappingKey::Num5),
+            22 => KeyInput::Letter(MappingKey::Num6),
+            26 => KeyInput::Letter(MappingKey::Num7),
+            28 => KeyInput::Letter(MappingKey::Num8),
+            25 => KeyInput::Letter(MappingKey::Num9),
+            29 => KeyInput::Letter(MappingKey::Num0),
+            43 => KeyInput::Letter(MappingKey::Comma),
+            47 => KeyInput::Letter(MappingKey::Period),
+            27 => KeyInput::Letter(MappingKey::Minus),
+            24 => KeyInput::Letter(MappingKey::Plus),
+            44 => KeyInput::Letter(MappingKey::Slash),
+            42 => KeyInput::Letter(MappingKey::Backslash),
+            75 => KeyInput::Letter(MappingKey::Divide),
+            67 => KeyInput::Letter(MappingKey::Multiply),
+            39 => KeyInput::Letter(MappingKey::Quote),
             49 => KeyInput::Space,
             53 => KeyInput::Escape,
             123 => KeyInput::LeftArrow,
@@ -117,6 +136,25 @@ mod platform {
             MappingKey::K => 40,
             MappingKey::N => 45,
             MappingKey::M => 46,
+            MappingKey::Num1 => 18,
+            MappingKey::Num2 => 19,
+            MappingKey::Num3 => 20,
+            MappingKey::Num4 => 21,
+            MappingKey::Num5 => 23,
+            MappingKey::Num6 => 22,
+            MappingKey::Num7 => 26,
+            MappingKey::Num8 => 28,
+            MappingKey::Num9 => 25,
+            MappingKey::Num0 => 29,
+            MappingKey::Comma => 43,
+            MappingKey::Period => 47,
+            MappingKey::Minus => 27,
+            MappingKey::Plus => 24,
+            MappingKey::Slash => 44,
+            MappingKey::Backslash => 42,
+            MappingKey::Divide => 75,
+            MappingKey::Multiply => 67,
+            MappingKey::Quote => 39,
         }
     }
 
@@ -258,6 +296,28 @@ mod platform {
         eprintln!("[QuickAccent] CGEventTap active. Listening for keys...");
         CFRunLoop::run_current();
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn symbol_keys_can_be_physically_verified_and_selected() {
+            let _guard = crate::mappings::test_guard();
+            crate::mappings::init(&["Special".into(), "Typography".into()]);
+            for code in [18, 19, 20, 21, 23, 22, 26, 28, 25, 29, 43, 47, 27, 24, 44, 42, 75, 67, 39] {
+                let input = keycode_to_input(code);
+                let KeyInput::Letter(key) = input else { panic!("unmapped key {code}") };
+                assert_eq!(mapping_key_to_keycode(key), code as u16);
+                let mut state = StateMachine::new(0, 0, ActivationKey::Space);
+                state.handle_key_press(input, false);
+                assert!(matches!(state.handle_key_press(KeyInput::Space, false),
+                    (true, Some(GrabEvent::ShowOverlay { .. }))));
+                assert!(matches!(state.handle_key_release(input),
+                    (true, Some(GrabEvent::InjectChar(_)))));
+            }
+        }
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -351,6 +411,25 @@ mod platform {
             Key::KeyX => Some(MappingKey::X),
             Key::KeyY => Some(MappingKey::Y),
             Key::KeyZ => Some(MappingKey::Z),
+            Key::Num0 => Some(MappingKey::Num0),
+            Key::Num1 => Some(MappingKey::Num1),
+            Key::Num2 => Some(MappingKey::Num2),
+            Key::Num3 => Some(MappingKey::Num3),
+            Key::Num4 => Some(MappingKey::Num4),
+            Key::Num5 => Some(MappingKey::Num5),
+            Key::Num6 => Some(MappingKey::Num6),
+            Key::Num7 => Some(MappingKey::Num7),
+            Key::Num8 => Some(MappingKey::Num8),
+            Key::Num9 => Some(MappingKey::Num9),
+            Key::Comma => Some(MappingKey::Comma),
+            Key::Dot => Some(MappingKey::Period),
+            Key::Minus => Some(MappingKey::Minus),
+            Key::Equal => Some(MappingKey::Plus),
+            Key::Slash => Some(MappingKey::Slash),
+            Key::BackSlash => Some(MappingKey::Backslash),
+            Key::KpDivide => Some(MappingKey::Divide),
+            Key::KpMultiply => Some(MappingKey::Multiply),
+            Key::Quote => Some(MappingKey::Quote),
             _ => None,
         }
     }
@@ -414,6 +493,40 @@ mod platform {
             assert!(!m.update(Key::CapsLock, true), "CapsLock must never be mirrored");
             assert!(!m.update(Key::KeyE, true));
             assert!(!m.update(Key::Space, true));
+        }
+
+        #[test]
+        fn symbol_events_use_the_expected_mapping_and_evdev_code() {
+            for (key, mapping, code, plain, shifted) in [
+                (Key::Num0, MappingKey::Num0, 11, "0", ")"),
+                (Key::Num1, MappingKey::Num1, 2, "1", "!"),
+                (Key::Num2, MappingKey::Num2, 3, "2", "@"),
+                (Key::Num3, MappingKey::Num3, 4, "3", "#"),
+                (Key::Num4, MappingKey::Num4, 5, "4", "$"),
+                (Key::Num5, MappingKey::Num5, 6, "5", "%"),
+                (Key::Num6, MappingKey::Num6, 7, "6", "^"),
+                (Key::Num7, MappingKey::Num7, 8, "7", "&"),
+                (Key::Num8, MappingKey::Num8, 9, "8", "*"),
+                (Key::Num9, MappingKey::Num9, 10, "9", "("),
+                (Key::Comma, MappingKey::Comma, 51, ",", "<"),
+                (Key::Dot, MappingKey::Period, 52, ".", ">"),
+                (Key::Minus, MappingKey::Minus, 12, "-", "_"),
+                (Key::Equal, MappingKey::Plus, 13, "=", "+"),
+                (Key::Slash, MappingKey::Slash, 53, "/", "?"),
+                (Key::BackSlash, MappingKey::Backslash, 43, "\\", "|"),
+                (Key::KpDivide, MappingKey::Divide, 98, "/", "/"),
+                (Key::KpMultiply, MappingKey::Multiply, 55, "*", "*"),
+                (Key::Quote, MappingKey::Quote, 40, "'", "\""),
+            ] {
+                assert_eq!(xkb_map::evdev_code_of(key), Some(code));
+                assert_eq!(xkb_map::evdev_code(mapping), code);
+                for event_type in [EventType::KeyPress(key), EventType::KeyRelease(key)] {
+                    for name in [None, Some(plain.to_string()), Some(shifted.to_string())] {
+                        let event = Event { time: std::time::SystemTime::UNIX_EPOCH, name, event_type };
+                        assert_eq!(event_to_input(&event), KeyInput::Letter(mapping), "{event:?}");
+                    }
+                }
+            }
         }
     }
 

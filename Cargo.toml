@@ -12,7 +12,7 @@ name = "quickaccent"
 path = "src/main.rs"
 
 [dependencies]
-iced = { version = "0.13", features = ["tokio"] }
+iced = { version = "0.13", features = ["tokio", "advanced"] }
 tokio = { version = "1", features = ["sync"] }
 log = "0.4"
 env_logger = "0.11"
