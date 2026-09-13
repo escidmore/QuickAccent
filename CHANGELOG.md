@@ -12,9 +12,10 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   `NSVisualEffectView` before that) with chips and text that follow the
   light/dark appearance, instead of an opaque dark panel.
 - **Settings window.** The menu-bar icon gains *Settings…* (⌘,): a checkbox
-  per language and symbol set. Toggling applies immediately and rewrites only
-  the `languages = [...]` line of `config.toml`, keeping your comments and
-  other settings.
+  per language and symbol set, and an Appearance choice (System / Light /
+  Dark, `theme = "..."` in `config.toml`) for the picker and the settings
+  window. Changes apply immediately and rewrite only the affected line of
+  `config.toml`, keeping your comments and other settings.
 - `QUICKACCENT_DEMO=overlay|settings` opens that window at startup without
   taking the keyboard grab — for screenshots and UI work.
 

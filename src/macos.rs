@@ -18,14 +18,15 @@ const OVERLAY_CORNER_RADIUS: f64 = 14.0;
 /// winit's content view and must stay the window's `contentView` — winit casts
 /// it back to its own type — so the backdrop is added as a sibling ordered
 /// below it and iced paints a transparent background over it.
-pub fn attach_glass_backdrop(ns_view: *mut c_void) {
+pub fn attach_glass_backdrop(ns_view: *mut c_void, dark: bool) {
     unsafe {
         let view = ns_view as id;
         let window: id = msg_send![view, window];
-        log::debug!("attaching glass backdrop: view={view:?} window={window:?}");
+        log::debug!("attaching glass backdrop: view={view:?} window={window:?} dark={dark}");
         if window == nil {
             return;
         }
+        set_window_appearance(window, dark);
         let _: () = msg_send![window, setOpaque: false];
         let clear: id = msg_send![class!(NSColor), clearColor];
         let _: () = msg_send![window, setBackgroundColor: clear];
@@ -64,6 +65,32 @@ pub fn attach_glass_backdrop(ns_view: *mut c_void) {
     }
 }
 
+/// Pin a window (and so its glass backdrop and title bar) to the light or dark
+/// appearance, so a forced theme does not put dark text on light glass.
+fn set_window_appearance(window: id, dark: bool) {
+    unsafe {
+        let name = NSString::alloc(nil).init_str(if dark {
+            "NSAppearanceNameDarkAqua"
+        } else {
+            "NSAppearanceNameAqua"
+        });
+        let appearance: id = msg_send![class!(NSAppearance), appearanceNamed: name];
+        if appearance != nil {
+            let _: () = msg_send![window, setAppearance: appearance];
+        }
+    }
+}
+
+/// Apply the resolved theme to a window that already exists (settings).
+pub fn apply_window_appearance(ns_view: *mut c_void, dark: bool) {
+    unsafe {
+        let window: id = msg_send![ns_view as id, window];
+        if window != nil {
+            set_window_appearance(window, dark);
+        }
+    }
+}
+
 /// Whether the system appearance is currently dark, so the picker's text and
 /// chips stay readable on glass that adapts to whatever is behind it.
 pub fn is_dark_appearance() -> bool {
@@ -77,7 +104,12 @@ pub fn is_dark_appearance() -> bool {
             return false;
         }
         let cstr: *const std::os::raw::c_char = msg_send![name, UTF8String];
-        !cstr.is_null() && std::ffi::CStr::from_ptr(cstr).to_string_lossy().contains("Dark")
+        if cstr.is_null() {
+            return false;
+        }
+        let name = std::ffi::CStr::from_ptr(cstr).to_string_lossy();
+        log::debug!("system appearance: {name}");
+        name.contains("Dark")
     }
 }
 

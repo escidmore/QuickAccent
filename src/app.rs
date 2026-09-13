@@ -1,5 +1,7 @@
 use iced::futures::SinkExt;
-use iced::widget::{checkbox, column, container, row, scrollable, text};
+use iced::widget::{checkbox, column, container, radio, row, scrollable, text};
+
+use crate::config::ThemeChoice;
 use iced::window;
 use iced::{color, Color, Element, Length, Subscription, Task, Theme};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -176,6 +178,7 @@ pub enum Message {
     WindowClosed(window::Id),
     OpenSettings,
     ToggleLanguage(String, bool),
+    SetTheme(ThemeChoice),
     Noop,
 }
 
@@ -186,9 +189,24 @@ pub struct App {
     settings_window: Option<window::Id>,
     /// Enabled languages / symbol sets, in config order.
     languages: Vec<String>,
-    /// System appearance sampled when the picker opens (macOS glass adapts to
-    /// what is behind it; our text has to follow).
+    /// Appearance from config; `System` follows macOS when a window opens.
+    theme_choice: ThemeChoice,
+    /// Resolved appearance for the open windows (macOS glass adapts to what is
+    /// behind it; our text has to follow).
     dark: bool,
+}
+
+/// Whether windows should render dark for `choice`, sampling the system
+/// appearance for `System` (macOS only; other platforms keep light).
+fn resolve_dark(choice: ThemeChoice) -> bool {
+    match choice {
+        ThemeChoice::Light => false,
+        ThemeChoice::Dark => true,
+        #[cfg(target_os = "macos")]
+        ThemeChoice::System => crate::macos::is_dark_appearance(),
+        #[cfg(not(target_os = "macos"))]
+        ThemeChoice::System => false,
+    }
 }
 
 impl App {
@@ -215,10 +233,37 @@ impl App {
                 overlay_window: None,
                 settings_window: None,
                 languages: Vec::new(),
+                theme_choice: ThemeChoice::System,
                 dark: false,
             },
             boot,
         )
+    }
+
+    /// Keep the settings window's native chrome (title bar) on the resolved
+    /// theme; iced only paints the content area.
+    fn sync_settings_appearance(&self) -> Task<Message> {
+        #[cfg(target_os = "macos")]
+        if let Some(id) = self.settings_window {
+            let dark = self.dark;
+            return window::run_with_handle(id, move |handle| {
+                use iced::window::raw_window_handle::RawWindowHandle;
+                if let RawWindowHandle::AppKit(appkit) = handle.as_raw() {
+                    crate::macos::apply_window_appearance(appkit.ns_view.as_ptr(), dark);
+                }
+            })
+            .map(|_| Message::Noop);
+        }
+        Task::none()
+    }
+
+    /// Re-read appearance from config (it may have been edited by hand) and
+    /// resolve it for the windows about to open.
+    fn refresh_appearance(&mut self) {
+        self.theme_choice = crate::config::read_config()
+            .map(|c| c.theme_parsed())
+            .unwrap_or(ThemeChoice::System);
+        self.dark = resolve_dark(self.theme_choice);
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -234,10 +279,8 @@ impl App {
                 }
 
                 #[cfg(target_os = "macos")]
-                {
-                    set_overlay_anchor(crate::macos::focused_window_rect());
-                    self.dark = crate::macos::is_dark_appearance();
-                }
+                set_overlay_anchor(crate::macos::focused_window_rect());
+                self.refresh_appearance();
 
                 let settings = overlay_settings(width);
                 log::debug!("opening overlay window at {:?}", settings.position);
@@ -265,17 +308,22 @@ impl App {
                 if self.overlay_window == Some(id) {
                     // Runs on the event-loop thread before the first frame is
                     // shown, so the glass is there from the start.
-                    return window::run_with_handle(id, |handle| {
+                    let dark = self.dark;
+                    return window::run_with_handle(id, move |handle| {
                         use iced::window::raw_window_handle::RawWindowHandle;
                         if let RawWindowHandle::AppKit(appkit) = handle.as_raw() {
-                            crate::macos::attach_glass_backdrop(appkit.ns_view.as_ptr());
+                            crate::macos::attach_glass_backdrop(appkit.ns_view.as_ptr(), dark);
                         }
                     })
                     .map(|_| Message::Noop);
                 }
                 if self.settings_window == Some(id) {
                     #[cfg(target_os = "macos")]
-                    crate::macos::activate_app();
+                    {
+                        crate::macos::activate_app();
+                        return Task::batch([self.sync_settings_appearance(), window::gain_focus(id)]);
+                    }
+                    #[cfg(not(target_os = "macos"))]
                     return window::gain_focus(id);
                 }
                 Task::none()
@@ -299,10 +347,7 @@ impl App {
                 self.languages = crate::config::read_config()
                     .map(|c| c.languages)
                     .unwrap_or_else(|| crate::config::Config::default().languages);
-                #[cfg(target_os = "macos")]
-                {
-                    self.dark = crate::macos::is_dark_appearance();
-                }
+                self.refresh_appearance();
                 let (id, open_task) = window::open(window::Settings {
                     size: iced::Size::new(560.0, 640.0),
                     min_size: Some(iced::Size::new(420.0, 360.0)),
@@ -315,6 +360,7 @@ impl App {
                 open_task.map(Message::WindowOpened)
             }
             Message::ToggleLanguage(name, enabled) => {
+                log::debug!("toggle {name} -> {enabled}");
                 if enabled {
                     if !self.languages.contains(&name) {
                         self.languages.push(name);
@@ -329,6 +375,14 @@ impl App {
                     eprintln!("[QuickAccent] Failed to save languages: {e}");
                 }
                 Task::none()
+            }
+            Message::SetTheme(choice) => {
+                self.theme_choice = choice;
+                self.dark = resolve_dark(choice);
+                if let Err(e) = crate::config::set_theme(choice) {
+                    eprintln!("[QuickAccent] Failed to save theme: {e}");
+                }
+                self.sync_settings_appearance()
             }
             Message::Noop => Task::none(),
         }
@@ -429,11 +483,28 @@ impl App {
             .into()
         };
 
+        let appearance: Element<'_, Message> = column(vec![
+            text("Appearance").size(15).into(),
+            row(ThemeChoice::ALL
+                .iter()
+                .map(|&choice| {
+                    radio(choice.label(), choice, Some(self.theme_choice), Message::SetTheme)
+                        .width(Length::Fill)
+                        .into()
+                })
+                .collect::<Vec<Element<Message>>>())
+            .spacing(8)
+            .into(),
+        ])
+        .spacing(8)
+        .into();
+
         let body = column(vec![
             text("QuickAccent").size(22).into(),
             text("Hold a letter, press Space, pick a variant, release the letter.")
                 .size(13)
                 .into(),
+            appearance,
             section("Languages", crate::mappings::LANGUAGES),
             section("Symbol sets", crate::mappings::SYMBOL_SETS),
             text(format!(
