@@ -17,10 +17,12 @@ type LangData = &'static [(MappingKey, &'static [&'static str])];
 /// Every language name `get_language_data` accepts, for the settings UI.
 /// Keep in sync with the match below — the test enforces it one way.
 pub const LANGUAGES: &[&str] = &[
-    "Catalan", "CrimeanTatar", "Croatian", "Czech", "Danish", "Dutch", "Esperanto",
+    "CanadianAboriginalSyllabics", "CanadianAboriginalSyllabicsExtended",
+    "CanadianAboriginalSyllabicsExtendedA", "Catalan", "Cherokee",
+    "CrimeanTatar", "Croatian", "Czech", "Danish", "Dutch", "Esperanto",
     "Estonian", "Finnish", "French", "German", "Greek", "Hebrew", "Hungarian", "IPA",
     "Iceland", "Irish", "Italian", "Kurdish", "Lithuanian", "Maltese", "Maori",
-    "Norwegian", "Pinyin", "Polish", "Portuguese", "ProtoIndoEuropean", "Romanian",
+    "Norwegian", "Osage", "Pinyin", "Polish", "Portuguese", "ProtoIndoEuropean", "Romanian",
     "Romanization", "ScottishGaelic", "Serbian", "Slovak", "Slovenian", "Spanish",
     "Swedish", "Turkish", "Vietnamese", "Welsh", "Yiddish",
 ];

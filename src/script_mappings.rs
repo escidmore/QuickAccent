@@ -268,6 +268,7 @@ mod tests {
                 vec![0x11AB0..=0x11ABF],
             ),
         ] {
+            assert!(crate::mappings::LANGUAGES.contains(&name), "{name} missing from Settings");
             init(&[name.into()]);
             let data = get_language_data(name).unwrap();
             for (uppercase, ranges) in [(false, lower), (true, upper)] {
