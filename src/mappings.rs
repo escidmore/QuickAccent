@@ -189,6 +189,70 @@ fn get_language_data(name: &str) -> Option<LangData> {
             (MappingKey::N, &["₦"]),
             (MappingKey::R, &["₨"]),
         ]),
+        // Phonetic Latin triggers; final forms are explicit choices, not an IME.
+        "Hebrew" => Some(&[
+            (MappingKey::A, &["א", "ע", "אַ", "אָ"]),
+            (MappingKey::B, &["ב", "בּ"]),
+            (MappingKey::C, &["צ", "ץ", "ח", "צ׳"]),
+            (MappingKey::D, &["ד", "דּ"]),
+            (MappingKey::E, &["אֶ", "אֵ", "ע"]),
+            (MappingKey::F, &["פ", "ף", "פֿ"]),
+            (MappingKey::G, &["ג", "גּ", "ג׳"]),
+            (MappingKey::H, &["ה", "ח", "הּ"]),
+            (MappingKey::I, &["י", "אִ"]),
+            (MappingKey::J, &["ג׳", "י"]),
+            (MappingKey::K, &["כ", "ך", "כּ", "ךּ", "ק"]),
+            (MappingKey::L, &["ל"]),
+            (MappingKey::M, &["מ", "ם"]),
+            (MappingKey::N, &["נ", "ן"]),
+            (MappingKey::O, &["וֹ", "אֹ"]),
+            (MappingKey::P, &["פּ", "פ", "ף"]),
+            (MappingKey::Q, &["ק"]),
+            (MappingKey::R, &["ר"]),
+            (MappingKey::S, &["ס", "ש", "שׁ", "שׂ"]),
+            (MappingKey::T, &["ת", "ט", "תּ", "צ", "ץ"]),
+            (MappingKey::U, &["וּ", "אֻ"]),
+            (MappingKey::V, &["ו", "ב", "בֿ"]),
+            (MappingKey::W, &["ו", "וו"]),
+            (MappingKey::X, &["ח", "כ", "ך"]),
+            (MappingKey::Y, &["י"]),
+            (MappingKey::Z, &["ז", "ז׳"]),
+            (MappingKey::Comma, &["׳", "״", "’", "”"]),
+            (MappingKey::Minus, &["־"]),
+            // Standalone combining marks attach to the preceding Hebrew letter.
+            (MappingKey::Period, &["\u{05b0}", "\u{05b1}", "\u{05b2}", "\u{05b3}", "\u{05b4}", "\u{05b5}", "\u{05b6}", "\u{05b7}", "\u{05b8}", "\u{05b9}", "\u{05ba}", "\u{05bb}", "\u{05bc}", "\u{05bd}", "\u{05bf}", "\u{05c1}", "\u{05c2}", "\u{05c7}"]),
+        ]),
+        "Yiddish" => Some(&[
+            (MappingKey::A, &["אַ", "אָ", "א", "ײַ"]),
+            (MappingKey::B, &["ב", "בּ", "בֿ"]),
+            (MappingKey::C, &["צ", "ץ", "טש"]),
+            (MappingKey::D, &["ד", "דזש"]),
+            (MappingKey::E, &["ע", "ײ"]),
+            (MappingKey::F, &["פֿ", "ף"]),
+            (MappingKey::G, &["ג"]),
+            (MappingKey::H, &["ה", "ח"]),
+            (MappingKey::I, &["י", "יִ"]),
+            (MappingKey::J, &["דזש", "י"]),
+            (MappingKey::K, &["ק", "כּ", "כ", "ך"]),
+            (MappingKey::L, &["ל"]),
+            (MappingKey::M, &["מ", "ם"]),
+            (MappingKey::N, &["נ", "ן"]),
+            (MappingKey::O, &["אָ", "ױ"]),
+            (MappingKey::P, &["פּ", "פ", "ף"]),
+            (MappingKey::Q, &["ק"]),
+            (MappingKey::R, &["ר"]),
+            (MappingKey::S, &["ס", "ש", "שׂ", "ת"]),
+            (MappingKey::T, &["ט", "תּ", "ת", "צ", "ץ", "טש"]),
+            (MappingKey::U, &["ו", "וּ"]),
+            (MappingKey::V, &["װ", "בֿ"]),
+            (MappingKey::W, &["װ"]),
+            (MappingKey::X, &["כ", "ך", "ח"]),
+            (MappingKey::Y, &["י", "ײ", "ײַ", "ױ"]),
+            (MappingKey::Z, &["ז", "זש"]),
+            (MappingKey::Comma, &["׳", "״", "„", "“"]),
+            (MappingKey::Minus, &["־"]),
+            (MappingKey::Period, &["\u{05b7}", "\u{05b8}", "\u{05b4}", "\u{05bc}", "\u{05bf}", "\u{05c2}"]),
+        ]),
         "Catalan" => Some(&[
             (MappingKey::A, &["à", "á"]),
             (MappingKey::C, &["ç"]),
@@ -549,6 +613,35 @@ fn get_language_data(name: &str) -> Option<LangData> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hebrew_yiddish_preserve_alphabets_marks_and_config_order() {
+        let _guard = test_guard();
+        init(&["French".into()]);
+        assert!(!get_variants(MappingKey::A, false).contains(&"א".into()));
+        for lang in ["Hebrew", "Yiddish"] {
+            init(&[lang.into()]);
+            let mut alphabet = String::new();
+            for (key, _) in get_language_data(lang).unwrap() {
+                let choices = get_variants(*key, false);
+                assert!(!choices.is_empty());
+                assert!(choices.iter().all(|s| !s.is_empty()));
+                assert_eq!(choices, get_variants(*key, true));
+                alphabet.push_str(&choices.concat());
+            }
+            for ch in "אבגדהוזחטיכךלמםנןסעפףצץקרשת".chars() {
+                assert!(alphabet.contains(ch), "{lang} missing {ch}");
+            }
+            assert!(get_variants(MappingKey::Period, true).contains(&"\u{05b7}".into()));
+        }
+        assert!(get_variants(MappingKey::J, true).contains(&"דזש".into()));
+        assert!(get_variants(MappingKey::Y, true).contains(&"ײַ".into()));
+        init(&["Yiddish".into(), "Hebrew".into()]);
+        let choices = get_variants(MappingKey::A, false);
+        assert_eq!(choices[0], "אַ");
+        assert_eq!(choices.iter().filter(|s| s.as_str() == "אַ").count(), 1);
+        assert!(choices.contains(&"ע".into()));
+    }
 
     #[test]
     fn optional_extensions_have_complete_case_stable_choices() {

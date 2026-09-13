@@ -317,6 +317,27 @@ mod platform {
                     (true, Some(GrabEvent::InjectChar(_)))));
             }
         }
+
+        #[test]
+        fn pointed_letters_and_yiddish_sequences_commit_intact_after_shift() {
+            let _guard = crate::mappings::test_guard();
+            for (lang, code, expected) in [
+                ("Hebrew", 31, "וֹ"),
+                ("Yiddish", 38, "דזש"),
+                ("Hebrew", 47, "\u{05b0}"),
+                ("Yiddish", 47, "\u{05b7}"),
+            ] {
+                crate::mappings::init(&[lang.into()]);
+                let input = keycode_to_input(code);
+                let mut state = StateMachine::new(0, 0, ActivationKey::Space);
+                state.handle_key_press(input, false);
+                assert!(matches!(state.handle_key_press(KeyInput::Space, false),
+                    (true, Some(GrabEvent::ShowOverlay { .. }))));
+                state.update_shift(true);
+                assert!(matches!(state.handle_key_release(input),
+                    (true, Some(GrabEvent::InjectChar(value))) if value == expected));
+            }
+        }
     }
 }
 

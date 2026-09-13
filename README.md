@@ -121,6 +121,10 @@ Add these names to `languages` to enable them. Hold a punctuation or number key
 and trigger the picker just as you would for a letter. See
 [character bindings](docs/CHARACTERS.md) for configuration and symbol keys.
 
+`Hebrew` and `Yiddish` are also available as optional language sets, using
+phonetic Latin keys. See [their bindings](docs/CHARACTERS.md#phonetic-hebrew-and-yiddish)
+for letters, final forms, vowel marks, and Yiddish combinations.
+
 ## Usage
 
 ```bash

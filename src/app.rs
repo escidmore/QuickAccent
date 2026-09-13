@@ -39,8 +39,9 @@ fn window_width_for(variants: &[String]) -> f32 {
 
 fn variant_label(ch: &str) -> String {
     // Display-only bases make combining marks visible. LRM prevents iced's
-    // shrink-width labels from clipping RTL currency glyphs at the far edge.
-    let base = if matches!(ch.chars().next(), Some('\u{0300}'..='\u{036f}')) { "◌" } else { "" };
+    // shrink-width labels from clipping RTL glyphs at the far edge.
+    let base = if matches!(ch.chars().next(),
+        Some('\u{0300}'..='\u{036f}' | '\u{05b0}'..='\u{05bd}' | '\u{05bf}' | '\u{05c1}' | '\u{05c2}' | '\u{05c7}')) { "◌" } else { "" };
     format!("\u{200e}{base}{ch}")
 }
 
@@ -88,7 +89,7 @@ mod tests {
     #[test]
     fn symbol_glyphs_stay_inside_the_visible_label() {
         use iced::advanced::{text::{Paragraph as _, Text}, graphics::text::Paragraph};
-        for variant in ["﷼", "؋", "°C", "°F", "V\u{0307}", "…", "\u{0301}", "SS"] {
+        for variant in ["﷼", "؋", "°C", "°F", "V\u{0307}", "…", "\u{0301}", "SS", "א", "אַ", "ײַ", "דזש", "\u{05b7}"] {
             let content = variant_label(variant);
             let paragraph = Paragraph::with_text(Text {
                 content: &content,
