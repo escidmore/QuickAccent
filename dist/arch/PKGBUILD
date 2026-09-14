@@ -1,0 +1,39 @@
+# Maintainer: Victor Masson <victor.massonv@gmail.com>
+# Prebuilt QuickAccent from the tagged GitHub release. The tarball is pinned by
+# sha256 below and carries a Sigstore build-provenance attestation:
+#   gh attestation verify quickaccent-linux-x86_64.tar.gz --repo victormasson/QuickAccent
+pkgname=quickaccent-bin
+_pkgname=quickaccent
+pkgver=1.2.0
+pkgrel=1
+pkgdesc="Accent character picker: hold a letter, press Space, pick an accent (evdev grab + uinput injection)"
+arch=('x86_64')
+url="https://github.com/victormasson/QuickAccent"
+license=('MIT')
+depends=('libxkbcommon' 'libevdev' 'libx11' 'libxcb' 'hicolor-icon-theme' 'systemd')
+optdepends=('wl-clipboard: emergency paste fallback when the keymap cannot be extended')
+provides=("$_pkgname")
+conflicts=("$_pkgname")
+install="$_pkgname.install"
+source=("$_pkgname-$pkgver.tar.gz::$url/releases/download/v$pkgver/quickaccent-linux-x86_64.tar.gz")
+# Refresh after tagging: `updpkgsums` (pacman-contrib). Must match SHA256SUMS on the release.
+sha256sums=('UPDATE-WITH-updpkgsums-AFTER-TAGGING')
+
+package() {
+  cd "$srcdir/quickaccent-linux-x86_64"
+  install -Dm755 quickaccent "$pkgdir/usr/bin/quickaccent"
+
+  # systemd --user unit (enable with: systemctl --user enable --now quickaccent)
+  sed 's|^ExecStart=.*|ExecStart=/usr/bin/quickaccent|' quickaccent.service \
+    | install -Dm644 /dev/stdin "$pkgdir/usr/lib/systemd/user/quickaccent.service"
+
+  # Group "input" may read keyboards and open /dev/uinput; uinput loads at boot.
+  install -Dm644 60-quickaccent.rules "$pkgdir/usr/lib/udev/rules.d/60-quickaccent.rules"
+  echo uinput | install -Dm644 /dev/stdin "$pkgdir/usr/lib/modules-load.d/quickaccent.conf"
+
+  install -Dm644 quickaccent.desktop "$pkgdir/usr/share/applications/quickaccent.desktop"
+  install -Dm644 quickaccent.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/quickaccent.svg"
+  install -Dm644 quickaccent-256.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/quickaccent.png"
+  install -Dm644 quickaccent-512.png "$pkgdir/usr/share/icons/hicolor/512x512/apps/quickaccent.png"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

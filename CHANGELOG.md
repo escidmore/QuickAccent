@@ -5,7 +5,18 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-14
+
 ### Added
+
+- **Verifiable Linux releases and an AUR package.** Releases now ship
+  `SHA256SUMS` and a Sigstore build-provenance attestation per archive
+  (`gh attestation verify <asset> --repo victormasson/QuickAccent`), and the
+  Linux tarball carries the license. `dist/arch/` packages the tarball as
+  `quickaccent-bin` (sha256-pinned; binary, user unit, udev rule,
+  `modules-load.d` entry, desktop file and icons under `/usr`). The Omarchy
+  plugin README installs the daemon from the AUR instead of piping a script
+  to `bash`, which the Omarchy plugin marketplace rejects.
 
 - **macOS: Liquid Glass picker.** The accent overlay now sits on a native
   glass backdrop (`NSGlassEffectView` on macOS 26+, a blurred
@@ -18,6 +29,16 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   `config.toml`, keeping your comments and other settings.
 - `QUICKACCENT_DEMO=overlay|settings` opens that window at startup without
   taking the keyboard grab — for screenshots and UI work.
+
+### Changed
+
+- **Installers verify before installing.** `dist/linux/install.sh` and
+  `dist/macos/install.sh` download the asset for the tag of the checkout they
+  run from, check it against `SHA256SUMS` (and the attestation when `gh` is
+  logged in) and refuse to continue on a mismatch. `curl | bash` is no longer
+  documented anywhere; clone the tag and run the script. The shipped systemd
+  unit defaults to `/usr/bin/quickaccent` (the user-local installer still
+  rewrites `ExecStart`).
 
 ### Fixed
 

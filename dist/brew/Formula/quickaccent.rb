@@ -41,9 +41,9 @@ class Quickaccent < Formula
         <key>CFBundlePackageType</key>
         <string>APPL</string>
         <key>CFBundleVersion</key>
-        <string>1.1.1</string>
+        <string>1.2.0</string>
         <key>CFBundleShortVersionString</key>
-        <string>1.1.1</string>
+        <string>1.2.0</string>
         <key>LSUIElement</key>
         <true/>
         <key>LSMinimumSystemVersion</key>
@@ -73,8 +73,8 @@ class Quickaccent < Formula
         #{opt_prefix}/QuickAccent.app
         (remove any stale QuickAccent entry from a previous install first).
 
-      Prebuilt (no Rust) alternative:
-        curl -fsSL https://raw.githubusercontent.com/victormasson/QuickAccent/master/dist/macos/install.sh | bash
+      Prebuilt (no Rust) alternative, from a clone at a release tag:
+        ./dist/macos/install.sh   (verifies the asset against SHA256SUMS)
 
       To start now and at login:
         brew services start quickaccent

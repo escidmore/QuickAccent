@@ -2,32 +2,31 @@
 
 ## Install (prebuilt, no Rust)
 
-The installer downloads `quickaccent-linux-x86_64.tar.gz` from the newest
-[stable release](https://github.com/victormasson/QuickAccent/releases/latest).
-Set `QUICKACCENT_VERSION=continuous` for the
-[rolling build](https://github.com/victormasson/QuickAccent/releases/tag/continuous)
-from `master`, or pin a tag such as `v1.0.0`.
+Release assets are verifiable: each release carries `SHA256SUMS` and a
+Sigstore build-provenance attestation
+(`gh attestation verify quickaccent-linux-x86_64.tar.gz --repo victormasson/QuickAccent`).
+
+**Arch / Omarchy:** AUR package `quickaccent-bin`, see [../arch/](../arch/README.md).
+
+**Fedora / Debian / others:** clone the release tag and run the installer from
+it. The installer downloads the asset for the same tag, checks it against
+`SHA256SUMS` (and the attestation when `gh` is logged in), and stops on any
+mismatch. Nothing downloaded is ever executed before verification.
 
 ```bash
-# Fedora / GNOME Wayland
+# Fedora / GNOME Wayland (Debian / Ubuntu: apt install wl-clipboard)
 sudo dnf install -y wl-clipboard
 
-curl -fsSL https://raw.githubusercontent.com/victormasson/QuickAccent/master/dist/linux/install.sh | bash
+git clone --branch v1.2.0 --depth 1 https://github.com/victormasson/QuickAccent
+QuickAccent/dist/linux/install.sh
 sudo reboot
-```
-
-Debian / Ubuntu: `sudo apt install wl-clipboard` then the same `curl | bash`.
-
-From a clone (still downloads the CI asset, does not compile):
-
-```bash
-./dist/linux/install.sh
 ```
 
 | Env | Default | Meaning |
 |-----|---------|---------|
 | `GITHUB_REPO` | `victormasson/QuickAccent` | Repo for assets |
-| `QUICKACCENT_VERSION` | `latest` | Release tag (`continuous` = rolling build) |
+| `QUICKACCENT_VERSION` | version of the checkout | Release tag; `latest` = newest stable, `continuous` = rolling build |
+| `QUICKACCENT_SKIP_VERIFY` | `0` | Set `1` only for releases before v1.2.0, which have no `SHA256SUMS` |
 | `PREFIX` | `~/.local` | Install prefix (`bin/`) |
 | `INSTALL_FROM_SOURCE` | `0` | Set `1` to `cargo build` instead |
 
