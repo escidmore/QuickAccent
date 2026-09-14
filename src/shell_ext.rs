@@ -1,8 +1,9 @@
 //! GNOME Shell helper extension: on Wayland only the compositor knows window
 //! geometry, so QuickAccent self-installs a micro-extension (see
 //! dist/linux/gnome-extension/) that reports the focused window's frame rect
-//! over D-Bus. Used to show the accent picker on the monitor being typed on;
-//! everything degrades to the centered overlay when it's unavailable.
+//! over D-Bus and shows a top-bar menu (Settings… / Quit). Used to show the
+//! accent picker on the monitor being typed on; everything degrades to the
+//! centered overlay when it's unavailable.
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -31,7 +32,10 @@ pub fn ensure_installed() {
     }
     let dir = extension_dir();
     let mut changed = false;
-    for (name, content) in [("extension.js", EXTENSION_JS), ("metadata.json", METADATA_JSON)] {
+    for (name, content) in [
+        ("extension.js", EXTENSION_JS),
+        ("metadata.json", METADATA_JSON),
+    ] {
         let path = dir.join(name);
         if std::fs::read_to_string(&path).ok().as_deref() != Some(content) {
             if let Err(e) = crate::xkb_custom::write_file(&path, content) {
@@ -47,6 +51,13 @@ pub fn ensure_installed() {
     ensure_enabled_setting();
     // If the shell has already scanned it (any run after a re-login), this
     // also loads it live.
+    if changed {
+        // Reload JS when the shell already knows the extension (later logins).
+        let _ = std::process::Command::new("gnome-extensions")
+            .args(["disable", UUID])
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
     let _ = std::process::Command::new("gnome-extensions")
         .args(["enable", UUID])
         .stderr(std::process::Stdio::null())
@@ -54,7 +65,8 @@ pub fn ensure_installed() {
     if changed && focused_window_rect().is_none() {
         eprintln!(
             "[QuickAccent] shell extension installed — log out/in once so the \
-             accent picker can follow the monitor you type on"
+             top-bar menu appears and the accent picker can follow the monitor \
+             you type on"
         );
     }
 }
@@ -146,5 +158,7 @@ mod tests {
     fn embedded_metadata_matches_uuid() {
         assert!(METADATA_JSON.contains(UUID));
         assert!(EXTENSION_JS.contains("FocusedWindow"));
+        assert!(EXTENSION_JS.contains("OpenSettings"));
+        assert!(EXTENSION_JS.contains("Quit QuickAccent"));
     }
 }

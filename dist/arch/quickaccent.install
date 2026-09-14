@@ -1,0 +1,23 @@
+post_install() {
+  modprobe uinput 2>/dev/null || true
+  cat <<'MSG'
+==> QuickAccent: two one-time steps for your user
+    sudo usermod -aG input "$USER"        # read keyboards + open /dev/uinput
+    reboot                                # systemd --user must pick up the group
+    systemctl --user enable --now quickaccent
+    Group "input" can read every keystroke on this machine: trusted users only.
+MSG
+}
+
+post_upgrade() {
+  echo "==> QuickAccent: restart the daemon with: systemctl --user restart quickaccent"
+}
+
+post_remove() {
+  cat <<'MSG'
+==> QuickAccent removed. Optional cleanup for your user:
+    systemctl --user disable --now quickaccent    # if still enabled
+    sudo gpasswd -d "$USER" input                 # if nothing else needs it
+    rm -rf ~/.config/xkb/symbols/quickaccent ~/.config/quickaccent
+MSG
+}

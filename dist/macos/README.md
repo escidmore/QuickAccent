@@ -2,8 +2,13 @@
 
 ## Install (prebuilt, no Rust)
 
+Clone the release tag and run the installer from it. It downloads the asset
+for that same tag, verifies it against `SHA256SUMS` (and the Sigstore
+attestation when `gh` is logged in), and stops on any mismatch:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/victormasson/QuickAccent/master/dist/macos/install.sh | bash
+git clone --branch v1.2.0 --depth 1 https://github.com/victormasson/QuickAccent
+QuickAccent/dist/macos/install.sh
 open ~/Applications/QuickAccent.app
 ```
 

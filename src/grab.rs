@@ -1,9 +1,35 @@
 use std::cell::RefCell;
+use std::sync::Mutex;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::config::{ActivationKey, Config};
 use crate::injection;
 use crate::state_machine::{GrabEvent, KeyInput, StateMachine};
+
+struct LiveGrab {
+    input_time_ms: u64,
+    hold_delay_ms: u64,
+    activation_key: ActivationKey,
+}
+
+static LIVE: Mutex<LiveGrab> = Mutex::new(LiveGrab {
+    input_time_ms: 200,
+    hold_delay_ms: 250,
+    activation_key: ActivationKey::Both,
+});
+
+pub fn set_live(input_time_ms: u64, hold_delay_ms: u64, activation_key: ActivationKey) {
+    *LIVE.lock().unwrap() = LiveGrab {
+        input_time_ms,
+        hold_delay_ms,
+        activation_key,
+    };
+}
+
+fn apply_live(sm: &mut StateMachine) {
+    let live = LIVE.lock().unwrap();
+    sm.set_timing(live.input_time_ms, live.hold_delay_ms, live.activation_key);
+}
 
 #[cfg(target_os = "macos")]
 mod platform {
@@ -180,6 +206,7 @@ mod platform {
         user_info: *mut c_void,
     ) -> CGEventRef {
         let ctx = unsafe { &*(user_info as *const TapContext) };
+        apply_live(&mut ctx.state.borrow_mut());
 
         match event_type {
             K_CG_EVENT_FLAGS_CHANGED => {
@@ -663,6 +690,7 @@ mod platform {
         let pending_release: RefCell<HashMap<u16, ReleaseAction>> = RefCell::new(HashMap::new());
 
         let callback = move |event: Event, is_repeat: bool| -> Option<Event> {
+            apply_live(&mut state.borrow_mut());
             let (key, pressed) = match event.event_type {
                 EventType::KeyPress(k) => (k, true),
                 EventType::KeyRelease(k) => (k, false),
@@ -780,6 +808,7 @@ pub fn run_grab_thread(tx: UnboundedSender<GrabEvent>, config: &Config) {
     let input_time_ms = config.input_time_ms;
     let hold_delay_ms = config.hold_delay_ms;
     let activation_key = config.activation_key_parsed();
+    set_live(input_time_ms, hold_delay_ms, activation_key);
     std::thread::spawn(move || {
         #[cfg(target_os = "macos")]
         eprintln!("[QuickAccent] Starting grab (grant Accessibility if needed)...");
