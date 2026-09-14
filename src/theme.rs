@@ -60,14 +60,9 @@ pub fn iced_theme(choice: ThemeChoice, dark: bool) -> Theme {
     }
 }
 
-/// macOS glass backdrop is only used for System / Light / Dark. Named
-/// palettes paint an opaque panel so the colours actually show.
-pub fn uses_glass(choice: ThemeChoice) -> bool {
+/// Blur behind the translucent picker (macOS only).
+pub fn uses_glass() -> bool {
     cfg!(target_os = "macos")
-        && matches!(
-            choice,
-            ThemeChoice::System | ThemeChoice::Light | ThemeChoice::Dark
-        )
 }
 
 pub fn is_dark(choice: ThemeChoice) -> bool {
@@ -104,27 +99,8 @@ pub struct OverlayColors {
     pub selected_text: Color,
 }
 
-pub fn overlay_colors(choice: ThemeChoice, dark: bool) -> OverlayColors {
-    if uses_glass(choice) {
-        return if dark {
-            OverlayColors {
-                panel: None,
-                chip: color!(0xFFFFFF, 0.16),
-                chip_text: color!(0xFFFFFF),
-                selected: color!(0x0A84FF),
-                selected_text: color!(0xFFFFFF),
-            }
-        } else {
-            OverlayColors {
-                panel: None,
-                chip: color!(0x000000, 0.08),
-                chip_text: color!(0x1C1C1E),
-                selected: color!(0x007AFF),
-                selected_text: color!(0xFFFFFF),
-            }
-        };
-    }
-
+pub fn overlay_colors(choice: ThemeChoice, dark: bool, opacity: f32) -> OverlayColors {
+    let opacity = opacity.clamp(0.35, 1.0);
     let p = iced_theme(choice, dark).palette();
     let chip = if dark {
         shift(p.background, 0.08)
@@ -133,7 +109,7 @@ pub fn overlay_colors(choice: ThemeChoice, dark: bool) -> OverlayColors {
     };
     OverlayColors {
         panel: Some(Color {
-            a: 0.95,
+            a: opacity,
             ..p.background
         }),
         chip,
@@ -178,13 +154,8 @@ mod tests {
     }
 
     #[test]
-    fn glass_only_for_system_light_dark_on_macos() {
-        let glass = cfg!(target_os = "macos");
-        assert_eq!(uses_glass(ThemeChoice::System), glass);
-        assert_eq!(uses_glass(ThemeChoice::Light), glass);
-        assert!(!uses_glass(ThemeChoice::Dracula));
-        assert!(!uses_glass(ThemeChoice::RosePine));
-        assert!(!uses_glass(ThemeChoice::CatppuccinMocha));
+    fn glass_is_macos_only() {
+        assert_eq!(uses_glass(), cfg!(target_os = "macos"));
     }
 
     #[test]

@@ -15,6 +15,11 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   and Rosé Pine (Main, Moon, Dawn). Values are stored as `theme = "..."` in
   `config.toml`. The picker overlay follows the same palette. On Linux,
   System follows GNOME `color-scheme`.
+- **GNOME-style picker.** Rounded, translucent overlay on Linux and macOS
+  (`overlay_opacity`, `overlay_radius`, `chip_radius`), with sliders in
+  Settings. macOS still uses a glass/blur backdrop behind the panel.
+- **Full Settings.** Hold delay, input time and activation key from
+  `config.toml` are editable in Settings and apply immediately.
 
 ## [1.2.0] - 2026-09-14
 

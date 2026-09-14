@@ -135,13 +135,18 @@ INSTALL_FROM_SOURCE=1 ./dist/linux/install.sh
 ```toml
 languages = ["French", "German", "Spanish"]
 # hold_delay_ms = 250
+# input_time_ms = 200
+# activation_key = "Both"   # Space | LeftRightArrow | Both
 # theme = "system"   # system | light | dark | dracula
                      # catppuccin-latte | catppuccin-frappe | catppuccin-macchiato | catppuccin-mocha
                      # rose-pine | rose-pine-moon | rose-pine-dawn
+# overlay_opacity = 0.88
+# overlay_radius = 16
+# chip_radius = 8
 ```
 
 On macOS the *Settings…* window in the menu-bar menu (and on GNOME the top-bar
-*QuickAccent* menu) edits `languages` and `theme` for you (only those lines are
+*QuickAccent* menu) edits every key above for you (only those lines are
 rewritten; comments and other keys are kept).
 
 **Languages:** Catalan, CrimeanTatar, Croatian, Czech, Danish, Dutch, Esperanto, Estonian, Finnish, French, German, Greek, Hungarian, IPA, Iceland, Irish, Italian, Kurdish, Lithuanian, Maltese, Maori, Norwegian, Pinyin, Polish, Portuguese, ProtoIndoEuropean, Romanian, Romanization, ScottishGaelic, Serbian, Slovak, Slovenian, Spanish, Swedish, Turkish, Vietnamese, Welsh

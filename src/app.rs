@@ -1,7 +1,7 @@
 use iced::futures::SinkExt;
-use iced::widget::{checkbox, column, container, pick_list, row, scrollable, text};
+use iced::widget::{checkbox, column, container, pick_list, row, scrollable, slider, text};
 
-use crate::config::ThemeChoice;
+use crate::config::{ActivationKey, ThemeChoice};
 use iced::window;
 use iced::{Color, Element, Length, Subscription, Task, Theme};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -234,6 +234,12 @@ pub enum Message {
     Quit,
     ToggleLanguage(String, bool),
     SetTheme(ThemeChoice),
+    SetHoldDelay(f32),
+    SetInputTime(f32),
+    SetActivationKey(ActivationKey),
+    SetOverlayOpacity(f32),
+    SetOverlayRadius(f32),
+    SetChipRadius(f32),
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     Noop,
 }
@@ -250,10 +256,33 @@ pub struct App {
     /// Resolved appearance for the open windows (macOS glass adapts to what is
     /// behind it; our text has to follow).
     dark: bool,
+    hold_delay_ms: u64,
+    input_time_ms: u64,
+    activation_key: ActivationKey,
+    overlay_opacity: f32,
+    overlay_radius: f32,
+    chip_radius: f32,
 }
 
 fn resolve_dark(choice: ThemeChoice) -> bool {
     crate::theme::is_dark(choice)
+}
+
+fn settings_slider<'a>(
+    label: &str,
+    value: String,
+    sl: Element<'a, Message>,
+) -> Element<'a, Message> {
+    column(vec![
+        row(vec![
+            text(label.to_string()).size(13).width(Length::Fill).into(),
+            text(value).size(13).into(),
+        ])
+        .into(),
+        sl,
+    ])
+    .spacing(4)
+    .into()
 }
 
 impl App {
@@ -273,15 +302,24 @@ impl App {
             Ok("settings") => Task::done(Message::OpenSettings),
             _ => Task::none(),
         };
+        let cfg = crate::config::read_config().unwrap_or_default();
+        let theme_choice = cfg.theme_parsed();
+        let activation_key = cfg.activation_key_parsed();
         (
             App {
                 variants: Vec::new(),
                 selected_index: 0,
                 overlay_window: None,
                 settings_window: None,
-                languages: Vec::new(),
-                theme_choice: ThemeChoice::System,
-                dark: false,
+                languages: cfg.languages,
+                theme_choice,
+                dark: resolve_dark(theme_choice),
+                hold_delay_ms: cfg.hold_delay_ms,
+                input_time_ms: cfg.input_time_ms,
+                activation_key,
+                overlay_opacity: cfg.overlay_opacity as f32,
+                overlay_radius: cfg.overlay_radius as f32,
+                chip_radius: cfg.chip_radius as f32,
             },
             boot,
         )
@@ -306,11 +344,17 @@ impl App {
 
     /// Re-read appearance from config (it may have been edited by hand) and
     /// resolve it for the windows about to open.
-    fn refresh_appearance(&mut self) {
-        self.theme_choice = crate::config::read_config()
-            .map(|c| c.theme_parsed())
-            .unwrap_or(ThemeChoice::System);
+    fn refresh_from_config(&mut self) {
+        let cfg = crate::config::read_config().unwrap_or_default();
+        self.theme_choice = cfg.theme_parsed();
         self.dark = resolve_dark(self.theme_choice);
+        self.hold_delay_ms = cfg.hold_delay_ms;
+        self.input_time_ms = cfg.input_time_ms;
+        self.activation_key = cfg.activation_key_parsed();
+        self.overlay_opacity = cfg.overlay_opacity as f32;
+        self.overlay_radius = cfg.overlay_radius as f32;
+        self.chip_radius = cfg.chip_radius as f32;
+        self.languages = cfg.languages;
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -327,7 +371,7 @@ impl App {
 
                 #[cfg(target_os = "macos")]
                 set_overlay_anchor(crate::macos::focused_window_rect());
-                self.refresh_appearance();
+                self.refresh_from_config();
 
                 let settings = overlay_settings(width);
                 log::debug!("opening overlay window at {:?}", settings.position);
@@ -356,17 +400,19 @@ impl App {
                     // Runs on the event-loop thread before the first frame is
                     // shown, so the glass is there from the start.
                     let dark = self.dark;
-                    let glass = crate::theme::uses_glass(self.theme_choice);
+                    let radius = self.overlay_radius as f64;
+                    let glass = crate::theme::uses_glass();
                     return window::run_with_handle(id, move |handle| {
                         use iced::window::raw_window_handle::RawWindowHandle;
                         if let RawWindowHandle::AppKit(appkit) = handle.as_raw() {
                             if glass {
-                                crate::macos::attach_glass_backdrop(appkit.ns_view.as_ptr(), dark);
-                            } else {
-                                crate::macos::apply_window_appearance(
+                                crate::macos::attach_glass_backdrop(
                                     appkit.ns_view.as_ptr(),
                                     dark,
+                                    radius,
                                 );
+                            } else {
+                                crate::macos::apply_window_appearance(appkit.ns_view.as_ptr(), dark);
                             }
                         }
                     })
@@ -402,12 +448,9 @@ impl App {
                     crate::macos::activate_app();
                     return window::gain_focus(id);
                 }
-                self.languages = crate::config::read_config()
-                    .map(|c| c.languages)
-                    .unwrap_or_else(|| crate::config::Config::default().languages);
-                self.refresh_appearance();
+                self.refresh_from_config();
                 let (id, open_task) = window::open(window::Settings {
-                    size: iced::Size::new(560.0, 640.0),
+                    size: iced::Size::new(560.0, 720.0),
                     min_size: Some(iced::Size::new(420.0, 360.0)),
                     position: window::Position::Centered,
                     level: window::Level::Normal,
@@ -443,6 +486,67 @@ impl App {
                 }
                 self.sync_settings_appearance()
             }
+            Message::SetHoldDelay(ms) => {
+                self.hold_delay_ms = ms.round().clamp(50.0, 800.0) as u64;
+                crate::grab::set_live(
+                    self.input_time_ms,
+                    self.hold_delay_ms,
+                    self.activation_key,
+                );
+                if let Err(e) = crate::config::set_u64("hold_delay_ms", self.hold_delay_ms) {
+                    eprintln!("[QuickAccent] Failed to save hold_delay_ms: {e}");
+                }
+                Task::none()
+            }
+            Message::SetInputTime(ms) => {
+                self.input_time_ms = ms.round().clamp(50.0, 800.0) as u64;
+                crate::grab::set_live(
+                    self.input_time_ms,
+                    self.hold_delay_ms,
+                    self.activation_key,
+                );
+                if let Err(e) = crate::config::set_u64("input_time_ms", self.input_time_ms) {
+                    eprintln!("[QuickAccent] Failed to save input_time_ms: {e}");
+                }
+                Task::none()
+            }
+            Message::SetActivationKey(key) => {
+                self.activation_key = key;
+                crate::grab::set_live(
+                    self.input_time_ms,
+                    self.hold_delay_ms,
+                    self.activation_key,
+                );
+                if let Err(e) = crate::config::set_activation_key(key) {
+                    eprintln!("[QuickAccent] Failed to save activation_key: {e}");
+                }
+                Task::none()
+            }
+            Message::SetOverlayOpacity(v) => {
+                self.overlay_opacity = v.clamp(0.35, 1.0);
+                if let Err(e) =
+                    crate::config::set_f64("overlay_opacity", self.overlay_opacity as f64)
+                {
+                    eprintln!("[QuickAccent] Failed to save overlay_opacity: {e}");
+                }
+                Task::none()
+            }
+            Message::SetOverlayRadius(v) => {
+                self.overlay_radius = v.clamp(0.0, 28.0);
+                if let Err(e) =
+                    crate::config::set_f64("overlay_radius", self.overlay_radius as f64)
+                {
+                    eprintln!("[QuickAccent] Failed to save overlay_radius: {e}");
+                }
+                Task::none()
+            }
+            Message::SetChipRadius(v) => {
+                self.chip_radius = v.clamp(0.0, 16.0);
+                if let Err(e) = crate::config::set_f64("chip_radius", self.chip_radius as f64) {
+                    eprintln!("[QuickAccent] Failed to save chip_radius: {e}");
+                }
+                Task::none()
+            }
             Message::Noop => Task::none(),
         }
     }
@@ -458,12 +562,15 @@ impl App {
                 .into();
         }
 
-        let colors = crate::theme::overlay_colors(self.theme_choice, self.dark);
+        let colors =
+            crate::theme::overlay_colors(self.theme_choice, self.dark, self.overlay_opacity);
         let chip = colors.chip;
         let chip_text = colors.chip_text;
         let selected = colors.selected;
         let selected_text = colors.selected_text;
         let panel = colors.panel;
+        let chip_radius = self.chip_radius;
+        let overlay_radius = self.overlay_radius;
 
         let cells: Vec<Element<Message>> =
             self.variants
@@ -485,7 +592,7 @@ impl App {
                                 chip
                             })),
                             border: iced::Border {
-                                radius: 8.0.into(),
+                                radius: chip_radius.into(),
                                 ..Default::default()
                             },
                             text_color: Some(if is_selected {
@@ -512,7 +619,7 @@ impl App {
         .style(move |_theme: &Theme| container::Style {
             background: panel.map(iced::Background::Color),
             border: iced::Border {
-                radius: 12.0.into(),
+                radius: overlay_radius.into(),
                 ..Default::default()
             },
             ..Default::default()
@@ -553,6 +660,56 @@ impl App {
             pick_list(ThemeChoice::ALL, Some(self.theme_choice), Message::SetTheme)
                 .width(Length::Fill)
                 .into(),
+            settings_slider(
+                "Overlay opacity",
+                format!("{:.0}%", self.overlay_opacity * 100.0),
+                slider(
+                    35.0..=100.0,
+                    self.overlay_opacity * 100.0,
+                    |v| Message::SetOverlayOpacity(v / 100.0),
+                )
+                .into(),
+            ),
+            settings_slider(
+                "Corner radius",
+                format!("{:.0} px", self.overlay_radius),
+                slider(0.0..=28.0, self.overlay_radius, Message::SetOverlayRadius).into(),
+            ),
+            settings_slider(
+                "Chip radius",
+                format!("{:.0} px", self.chip_radius),
+                slider(0.0..=16.0, self.chip_radius, Message::SetChipRadius).into(),
+            ),
+        ])
+        .spacing(10)
+        .into();
+
+        let behaviour: Element<'_, Message> = column(vec![
+            text("Behaviour").size(15).into(),
+            settings_slider(
+                "Hold delay",
+                format!("{} ms", self.hold_delay_ms),
+                slider(50.0..=800.0, self.hold_delay_ms as f32, Message::SetHoldDelay).into(),
+            ),
+            text("How long to hold a letter before Space shows the picker.")
+                .size(11)
+                .into(),
+            settings_slider(
+                "Input time",
+                format!("{} ms", self.input_time_ms),
+                slider(50.0..=800.0, self.input_time_ms as f32, Message::SetInputTime).into(),
+            ),
+            text("Minimum hold before a picked accent is committed.")
+                .size(11)
+                .into(),
+            text("Activation key").size(13).into(),
+            pick_list(
+                ActivationKey::ALL,
+                Some(self.activation_key),
+                Message::SetActivationKey,
+            )
+            .width(Length::Fill)
+            .into(),
         ])
         .spacing(8)
         .into();
@@ -563,6 +720,7 @@ impl App {
                 .size(13)
                 .into(),
             appearance,
+            behaviour,
             section("Languages", crate::mappings::LANGUAGES),
             section("Symbol sets", crate::mappings::SYMBOL_SETS),
             text(format!(
@@ -597,15 +755,11 @@ impl App {
         crate::theme::iced_theme(self.theme_choice, self.dark)
     }
 
-    /// Window backgrounds. On macOS the picker window is see-through so the
-    /// glass backdrop shows; the settings window paints its own background.
+    /// Window backgrounds. The picker is see-through so rounded corners and
+    /// (on macOS) glass show; the settings window paints its own background.
     pub fn style(&self, theme: &Theme) -> iced::daemon::Appearance {
         iced::daemon::Appearance {
-            background_color: if cfg!(target_os = "macos") {
-                Color::TRANSPARENT
-            } else {
-                theme.palette().background
-            },
+            background_color: Color::TRANSPARENT,
             text_color: theme.palette().text,
         }
     }

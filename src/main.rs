@@ -321,6 +321,11 @@ fn start_config_watcher() {
                     last_reload = now;
                     if let Some(cfg) = config::read_config() {
                         mappings::reload(&cfg.languages);
+                        grab::set_live(
+                            cfg.input_time_ms,
+                            cfg.hold_delay_ms,
+                            cfg.activation_key_parsed(),
+                        );
                         eprintln!(
                             "[QuickAccent] Reloaded config: languages = {:?}",
                             cfg.languages

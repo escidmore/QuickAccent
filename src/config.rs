@@ -8,6 +8,36 @@ pub enum ActivationKey {
     Both,
 }
 
+impl ActivationKey {
+    pub const ALL: [ActivationKey; 3] = [
+        ActivationKey::Space,
+        ActivationKey::LeftRightArrow,
+        ActivationKey::Both,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ActivationKey::Space => "Space",
+            ActivationKey::LeftRightArrow => "LeftRightArrow",
+            ActivationKey::Both => "Both",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ActivationKey::Space => "Space",
+            ActivationKey::LeftRightArrow => "Left / Right arrow",
+            ActivationKey::Both => "Space and arrows",
+        }
+    }
+}
+
+impl std::fmt::Display for ActivationKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
 /// Appearance of the picker and the settings window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThemeChoice {
@@ -91,6 +121,12 @@ pub struct Config {
     pub activation_key: String,
     #[serde(default = "default_theme")]
     pub theme: String,
+    #[serde(default = "default_overlay_opacity")]
+    pub overlay_opacity: f64,
+    #[serde(default = "default_overlay_radius")]
+    pub overlay_radius: f64,
+    #[serde(default = "default_chip_radius")]
+    pub chip_radius: f64,
 }
 
 fn default_languages() -> Vec<String> {
@@ -111,6 +147,18 @@ fn default_hold_delay_ms() -> u64 {
 
 fn default_activation_key() -> String {
     "Both".to_string()
+}
+
+fn default_overlay_opacity() -> f64 {
+    0.88
+}
+
+fn default_overlay_radius() -> f64 {
+    16.0
+}
+
+fn default_chip_radius() -> f64 {
+    8.0
 }
 
 impl Config {
@@ -147,6 +195,9 @@ impl Default for Config {
             hold_delay_ms: default_hold_delay_ms(),
             activation_key: default_activation_key(),
             theme: default_theme(),
+            overlay_opacity: default_overlay_opacity(),
+            overlay_radius: default_overlay_radius(),
+            chip_radius: default_chip_radius(),
         }
     }
 }
@@ -223,6 +274,11 @@ languages = ["French"]
 #   rose-pine, rose-pine-moon, rose-pine-dawn
 # Default: "system"
 # theme = "system"
+
+# Picker overlay (GNOME-style rounded translucent panel), both Linux and macOS.
+# overlay_opacity = 0.88    # 0.35–1.0
+# overlay_radius = 16       # corner radius in px
+# chip_radius = 8           # variant-chip corner radius in px
 "#;
             std::fs::write(&path, default_toml).ok();
             config
@@ -260,6 +316,18 @@ pub fn set_languages(languages: &[String]) -> std::io::Result<()> {
 /// Persist the appearance choice; see [`set_languages`].
 pub fn set_theme(theme: ThemeChoice) -> std::io::Result<()> {
     set_value("theme", &format!("{:?}", theme.as_str()))
+}
+
+pub fn set_activation_key(key: ActivationKey) -> std::io::Result<()> {
+    set_value("activation_key", &format!("{:?}", key.as_str()))
+}
+
+pub fn set_u64(key: &str, value: u64) -> std::io::Result<()> {
+    set_value(key, &value.to_string())
+}
+
+pub fn set_f64(key: &str, value: f64) -> std::io::Result<()> {
+    set_value(key, &format!("{value:.2}"))
 }
 
 fn set_value(key: &str, rendered_value: &str) -> std::io::Result<()> {
@@ -327,6 +395,9 @@ mod tests {
         assert_eq!(c.hold_delay_ms, 250);
         assert_eq!(c.activation_key, "Both");
         assert_eq!(c.activation_key_parsed(), ActivationKey::Both);
+        assert_eq!(c.overlay_opacity, 0.88);
+        assert_eq!(c.overlay_radius, 16.0);
+        assert_eq!(c.chip_radius, 8.0);
     }
 
     #[test]
@@ -356,6 +427,18 @@ mod tests {
         assert_eq!(c.input_time_ms, 100);
         assert_eq!(c.hold_delay_ms, 300);
         assert_eq!(c.activation_key_parsed(), ActivationKey::Space);
+        assert_eq!(c.overlay_opacity, 0.88);
+    }
+
+    #[test]
+    fn overlay_style_parses() {
+        let c = parse_config_str(
+            "overlay_opacity = 0.5\noverlay_radius = 20\nchip_radius = 4\n",
+        )
+        .unwrap();
+        assert_eq!(c.overlay_opacity, 0.5);
+        assert_eq!(c.overlay_radius, 20.0);
+        assert_eq!(c.chip_radius, 4.0);
     }
 
     #[test]
