@@ -31,14 +31,35 @@ prerelease rebuilt on every `master` push.
 
 ### Linux (Wayland or X11; GNOME and Hyprland/Omarchy) — prebuilt, no Rust
 
+Every release ships `quickaccent-linux-x86_64.tar.gz`, a `SHA256SUMS` file and
+a Sigstore build-provenance attestation, so the binary you install can be
+checked against what CI built from the tagged commit:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/victormasson/QuickAccent/master/dist/linux/install.sh | bash
+gh attestation verify quickaccent-linux-x86_64.tar.gz --repo victormasson/QuickAccent
+```
+
+**Arch / Omarchy** — AUR package [`quickaccent-bin`](dist/arch/) (tarball
+pinned by sha256 in the PKGBUILD):
+
+```bash
+yay -S quickaccent-bin           # or: omarchy pkg add quickaccent-bin
+sudo usermod -aG input "$USER"   # then reboot once
+systemctl --user enable --now quickaccent
+```
+
+**Fedora, Debian, others** — clone the release tag and run the installer. It
+downloads the tarball for that same tag, verifies it against `SHA256SUMS`
+(and the attestation when `gh` is logged in), and refuses to continue on a
+mismatch:
+
+```bash
+git clone --branch v1.2.0 --depth 1 https://github.com/victormasson/QuickAccent
+QuickAccent/dist/linux/install.sh
 sudo reboot
 ```
 
-The script downloads `quickaccent-linux-x86_64.tar.gz` from the
-[`continuous`](https://github.com/victormasson/QuickAccent/releases/tag/continuous)
-release and sets everything up:
+The installer sets up:
 
 - `~/.local/bin/quickaccent` + a systemd user unit (starts with your session)
 - udev rule for `/dev/input` + `/dev/uinput`, loads the `uinput` module at boot
@@ -60,13 +81,14 @@ Notes:
   desktops.
 - Uninstall / undo the keymap extension: remove `quickaccent:accents` from
   `gsettings get org.gnome.desktop.input-sources xkb-options`, delete
-  `~/.config/xkb/symbols/quickaccent`, and `systemctl --user disable --now quickaccent`.
+  `~/.config/xkb/symbols/quickaccent`, and `systemctl --user disable --now quickaccent`
+  (Arch: `sudo pacman -Rns quickaccent-bin`).
 
 Details: [dist/linux/README.md](dist/linux/README.md).
 
 #### Omarchy / Hyprland
 
-The same command works. QuickAccent enables its keymap option with
+Install the AUR package as above. QuickAccent enables its keymap option with
 `hyprctl keyword input:kb_options` (applied instantly, `hyprland.conf` is not
 touched) and follows the focused window with `hyprctl activewindow`, so the
 picker opens on the monitor you are typing on. There is an optional bar widget
@@ -75,7 +97,8 @@ for the Omarchy shell in [dist/omarchy/](dist/omarchy/).
 ### macOS (universal, no Rust)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/victormasson/QuickAccent/master/dist/macos/install.sh | bash
+git clone --branch v1.2.0 --depth 1 https://github.com/victormasson/QuickAccent
+QuickAccent/dist/macos/install.sh    # verifies the asset against SHA256SUMS
 open ~/Applications/QuickAccent.app
 ```
 
@@ -114,13 +137,20 @@ timing, activation-key, or pagination changes:
 ```toml
 languages = ["French", "German", "Spanish"]
 # hold_delay_ms = 250
-# theme = "system"   # or "light" / "dark" — picker and settings appearance
 # items_per_page = 0
+# input_time_ms = 200
+# activation_key = "Both"   # Space | LeftRightArrow | Both
+# theme = "system"   # system | light | dark | dracula
+                     # catppuccin-latte | catppuccin-frappe | catppuccin-macchiato | catppuccin-mocha
+                     # rose-pine | rose-pine-moon | rose-pine-dawn
+# overlay_opacity = 0.88
+# overlay_radius = 16
+# chip_radius = 8
 ```
 
-On macOS the *Settings…* window in the menu-bar menu edits `languages` and
-`theme` for you (only those lines are rewritten; comments and other keys are
-kept).
+On macOS the *Settings…* window in the menu-bar menu (and on GNOME the top-bar
+*QuickAccent* menu) edits the settings above except `items_per_page` for you (only those lines are
+rewritten; comments and other keys are kept).
 
 **Languages:** Catalan, CrimeanTatar, Croatian, Czech, Danish, Dutch, Esperanto, Estonian, Finnish, French, German, Greek, Hungarian, IPA, Iceland, Irish, Italian, Kurdish, Lithuanian, Maltese, Maori, Norwegian, Pinyin, Polish, Portuguese, ProtoIndoEuropean, Romanian, Romanization, ScottishGaelic, Serbian, Slovak, Slovenian, Spanish, Swedish, Turkish, Vietnamese, Welsh
 
@@ -178,11 +208,15 @@ without it the overlay is centered on the primary monitor.
 | [Release](.github/workflows/release.yml) | push to `master` | Rolling assets on [`continuous`](https://github.com/victormasson/QuickAccent/releases/tag/continuous) (prerelease) |
 | [Release](.github/workflows/release.yml) | tag `v*` | Stable release, notes taken from [CHANGELOG.md](CHANGELOG.md) |
 
-Assets: `quickaccent-linux-x86_64.tar.gz`, `QuickAccent-macos-universal.tar.gz`.
+Assets: `quickaccent-linux-x86_64.tar.gz`, `QuickAccent-macos-universal.tar.gz`,
+`SHA256SUMS`, plus a [build-provenance attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations)
+per archive (`gh attestation verify <asset> --repo victormasson/QuickAccent`).
 
 Cutting a release: update `CHANGELOG.md`, bump the version in `Cargo.toml`,
-`dist/macos/QuickAccent.app/Contents/Info.plist` and the brew formula, then
-`git tag vX.Y.Z && git push origin vX.Y.Z`.
+`dist/macos/QuickAccent.app/Contents/Info.plist`, `dist/omarchy/manifest.json`
+and `dist/arch/PKGBUILD`, then `git tag vX.Y.Z && git push origin vX.Y.Z`.
+Once the release is up, pin its sha256 in the PKGBUILD and push to the AUR
+([dist/arch/README.md](dist/arch/README.md)).
 
 Unit tests cover the accent state machine, mappings, config, and helpers.  
 Desktop grab/inject: [docs/MANUAL_TEST.md](docs/MANUAL_TEST.md).

@@ -11,19 +11,37 @@ widget showing whether the picker is armed, click to toggle.
 
 ## 1. Install the daemon
 
-Download the installer pinned to a release tag, read it, then run it — it is
-short, and does only what this README describes (binary, systemd user unit,
-udev rule, `input` group membership):
+The daemon is packaged for Arch as [`quickaccent-bin`](https://aur.archlinux.org/packages/quickaccent-bin)
+(sources in [`dist/arch`](https://github.com/victormasson/QuickAccent/tree/master/dist/arch)
+of the main repo). The PKGBUILD pins the release tarball by sha256, and the
+release itself carries a Sigstore build-provenance attestation, so the binary
+can be checked against what CI built from the tagged commit.
 
 ```bash
-curl -fsSLo quickaccent-install.sh https://raw.githubusercontent.com/victormasson/QuickAccent/v1.1.1/dist/linux/install.sh
-less quickaccent-install.sh   # review before running
-bash quickaccent-install.sh && rm quickaccent-install.sh
+yay -S quickaccent-bin           # or: omarchy pkg add quickaccent-bin
+sudo usermod -aG input "$USER"   # read keyboards + open /dev/uinput
 ```
 
-This installs `~/.local/bin/quickaccent`, a systemd user unit, a udev rule
-for `/dev/input` + `/dev/uinput`, and adds you to the `input` group.
-**Reboot once** afterwards so the user session picks up the new group.
+**Reboot once** so the user session picks up the `input` group, then:
+
+```bash
+systemctl --user enable --now quickaccent
+```
+
+To check the release asset the package is pinned to (optional, needs
+`gh auth login`):
+
+```bash
+gh release download v1.2.0 --repo victormasson/QuickAccent -p 'quickaccent-linux-x86_64.tar.gz' -p SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS
+gh attestation verify quickaccent-linux-x86_64.tar.gz --repo victormasson/QuickAccent
+yay -G quickaccent-bin && grep sha256sums quickaccent-bin/PKGBUILD   # same digest as SHA256SUMS
+```
+
+The package installs `/usr/bin/quickaccent`, a systemd user unit, a udev rule
+for `/dev/input` + `/dev/uinput` and a `modules-load.d` entry for `uinput`.
+Other distributions: see the
+[QuickAccent README](https://github.com/victormasson/QuickAccent#install).
 
 ## 2. Install the plugin
 
@@ -104,12 +122,12 @@ Uninstall the daemon (optional — it is a separate program):
 
 ```bash
 systemctl --user disable --now quickaccent
-rm -f ~/.local/bin/quickaccent ~/.config/systemd/user/quickaccent.service
+sudo pacman -Rns quickaccent-bin
+sudo gpasswd -d "$USER" input      # if nothing else needs the group
 rm -rf ~/.config/xkb/symbols/quickaccent ~/.config/quickaccent
 # drop the runtime keymap option Hyprland is holding
 hyprctl keyword input:kb_options "$(hyprctl getoption input:kb_options -j | \
   python3 -c 'import json,sys;print(",".join(o for o in json.load(sys.stdin)["str"].split(",") if o!="quickaccent:accents"))')" 2>/dev/null || true
-sudo rm -f /etc/udev/rules.d/60-quickaccent.rules /etc/modules-load.d/uinput.conf
 ```
 
 ## License

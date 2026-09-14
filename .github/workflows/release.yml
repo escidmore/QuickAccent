@@ -13,6 +13,11 @@ concurrency:
 
 permissions:
   contents: write
+  # Build-provenance attestations (Sigstore) for the release tarballs, so
+  # anyone can verify an asset independently of the download host:
+  #   gh attestation verify quickaccent-linux-x86_64.tar.gz --repo victormasson/QuickAccent
+  id-token: write
+  attestations: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -66,6 +71,7 @@ jobs:
           cp assets/icon-app.svg "$STAGE/quickaccent.svg"
           cp assets/icon-app-256.png "$STAGE/quickaccent-256.png"
           cp assets/icon-app-512.png "$STAGE/quickaccent-512.png"
+          cp LICENSE "$STAGE/"
           tar -czf quickaccent-linux-x86_64.tar.gz "$STAGE"
 
       - uses: actions/upload-artifact@v4
@@ -131,6 +137,19 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Checksums
+        run: |
+          cd artifacts
+          sha256sum quickaccent-linux-x86_64.tar.gz QuickAccent-macos-universal.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            artifacts/quickaccent-linux-x86_64.tar.gz
+            artifacts/QuickAccent-macos-universal.tar.gz
+
       - name: List artifacts
         run: ls -la artifacts/
 
@@ -152,17 +171,31 @@ jobs:
           ## Install
 
           \`\`\`bash
-          # Linux (Wayland or X11)
-          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/dist/linux/install.sh | bash
+          # Arch / Omarchy (AUR)
+          yay -S quickaccent-bin
+
+          # Other Linux (Fedora, Debian…): clone at this tag, the installer verifies
+          # the asset against SHA256SUMS before installing it
+          git clone --branch ${GITHUB_REF_NAME} --depth 1 https://github.com/${{ github.repository }}
+          QuickAccent/dist/linux/install.sh
 
           # macOS (universal)
-          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/dist/macos/install.sh | bash
+          git clone --branch ${GITHUB_REF_NAME} --depth 1 https://github.com/${{ github.repository }}
+          QuickAccent/dist/macos/install.sh
+          \`\`\`
+
+          ## Verify an asset
+
+          \`\`\`bash
+          sha256sum -c --ignore-missing SHA256SUMS
+          gh attestation verify quickaccent-linux-x86_64.tar.gz --repo ${{ github.repository }}
           \`\`\`
 
           | File | Platform |
           |------|----------|
           | \`quickaccent-linux-x86_64.tar.gz\` | Linux x86_64 |
           | \`QuickAccent-macos-universal.tar.gz\` | macOS universal (arm64 + x86_64) |
+          | \`SHA256SUMS\` | Checksums of the two archives |
           EOF
           echo "--- release notes ---"; cat RELEASE_NOTES.md
 
@@ -178,6 +211,7 @@ jobs:
           files: |
             artifacts/quickaccent-linux-x86_64.tar.gz
             artifacts/QuickAccent-macos-universal.tar.gz
+            artifacts/SHA256SUMS
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -209,18 +243,18 @@ jobs:
             | `QuickAccent-macos-universal.tar.gz` | macOS universal (arm64 + x86_64) |
 
             ### Install
+            Rolling builds are for testing. From a clone of `master`:
             ```bash
-            # Linux
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/dist/linux/install.sh | bash
-
-            # macOS
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/dist/macos/install.sh | bash
+            QUICKACCENT_VERSION=continuous ./dist/linux/install.sh   # Linux
+            QUICKACCENT_VERSION=continuous ./dist/macos/install.sh   # macOS
             ```
-
-            Or download assets from this release and follow [README](https://github.com/${{ github.repository }}#install).
+            Verify an asset with `sha256sum -c --ignore-missing SHA256SUMS` or
+            `gh attestation verify <asset> --repo ${{ github.repository }}`.
+            For the stable install see the [README](https://github.com/${{ github.repository }}#install).
           files: |
             artifacts/quickaccent-linux-x86_64.tar.gz
             artifacts/QuickAccent-macos-universal.tar.gz
+            artifacts/SHA256SUMS
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
