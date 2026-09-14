@@ -8,16 +8,66 @@ pub enum ActivationKey {
     Both,
 }
 
+impl ActivationKey {
+    pub const ALL: [ActivationKey; 3] = [
+        ActivationKey::Space,
+        ActivationKey::LeftRightArrow,
+        ActivationKey::Both,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ActivationKey::Space => "Space",
+            ActivationKey::LeftRightArrow => "LeftRightArrow",
+            ActivationKey::Both => "Both",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ActivationKey::Space => "Space",
+            ActivationKey::LeftRightArrow => "Left / Right arrow",
+            ActivationKey::Both => "Space and arrows",
+        }
+    }
+}
+
+impl std::fmt::Display for ActivationKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
 /// Appearance of the picker and the settings window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThemeChoice {
     System,
     Light,
     Dark,
+    Dracula,
+    CatppuccinLatte,
+    CatppuccinFrappe,
+    CatppuccinMacchiato,
+    CatppuccinMocha,
+    RosePine,
+    RosePineMoon,
+    RosePineDawn,
 }
 
 impl ThemeChoice {
-    pub const ALL: [ThemeChoice; 3] = [ThemeChoice::System, ThemeChoice::Light, ThemeChoice::Dark];
+    pub const ALL: [ThemeChoice; 11] = [
+        ThemeChoice::System,
+        ThemeChoice::Light,
+        ThemeChoice::Dark,
+        ThemeChoice::Dracula,
+        ThemeChoice::CatppuccinLatte,
+        ThemeChoice::CatppuccinFrappe,
+        ThemeChoice::CatppuccinMacchiato,
+        ThemeChoice::CatppuccinMocha,
+        ThemeChoice::RosePine,
+        ThemeChoice::RosePineMoon,
+        ThemeChoice::RosePineDawn,
+    ];
 
     /// The value written to `config.toml`.
     pub fn as_str(self) -> &'static str {
@@ -25,6 +75,14 @@ impl ThemeChoice {
             ThemeChoice::System => "system",
             ThemeChoice::Light => "light",
             ThemeChoice::Dark => "dark",
+            ThemeChoice::Dracula => "dracula",
+            ThemeChoice::CatppuccinLatte => "catppuccin-latte",
+            ThemeChoice::CatppuccinFrappe => "catppuccin-frappe",
+            ThemeChoice::CatppuccinMacchiato => "catppuccin-macchiato",
+            ThemeChoice::CatppuccinMocha => "catppuccin-mocha",
+            ThemeChoice::RosePine => "rose-pine",
+            ThemeChoice::RosePineMoon => "rose-pine-moon",
+            ThemeChoice::RosePineDawn => "rose-pine-dawn",
         }
     }
 
@@ -33,7 +91,21 @@ impl ThemeChoice {
             ThemeChoice::System => "System",
             ThemeChoice::Light => "Light",
             ThemeChoice::Dark => "Dark",
+            ThemeChoice::Dracula => "Dracula",
+            ThemeChoice::CatppuccinLatte => "Catppuccin Latte",
+            ThemeChoice::CatppuccinFrappe => "Catppuccin Frappé",
+            ThemeChoice::CatppuccinMacchiato => "Catppuccin Macchiato",
+            ThemeChoice::CatppuccinMocha => "Catppuccin Mocha",
+            ThemeChoice::RosePine => "Rosé Pine",
+            ThemeChoice::RosePineMoon => "Rosé Pine Moon",
+            ThemeChoice::RosePineDawn => "Rosé Pine Dawn",
         }
+    }
+}
+
+impl std::fmt::Display for ThemeChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
     }
 }
 
@@ -49,6 +121,12 @@ pub struct Config {
     pub activation_key: String,
     #[serde(default = "default_theme")]
     pub theme: String,
+    #[serde(default = "default_overlay_opacity")]
+    pub overlay_opacity: f64,
+    #[serde(default = "default_overlay_radius")]
+    pub overlay_radius: f64,
+    #[serde(default = "default_chip_radius")]
+    pub chip_radius: f64,
 }
 
 fn default_languages() -> Vec<String> {
@@ -71,6 +149,18 @@ fn default_activation_key() -> String {
     "Both".to_string()
 }
 
+fn default_overlay_opacity() -> f64 {
+    0.88
+}
+
+fn default_overlay_radius() -> f64 {
+    16.0
+}
+
+fn default_chip_radius() -> f64 {
+    8.0
+}
+
 impl Config {
     pub fn activation_key_parsed(&self) -> ActivationKey {
         match self.activation_key.as_str() {
@@ -84,6 +174,14 @@ impl Config {
         match self.theme.to_ascii_lowercase().as_str() {
             "light" => ThemeChoice::Light,
             "dark" => ThemeChoice::Dark,
+            "dracula" => ThemeChoice::Dracula,
+            "catppuccin-latte" => ThemeChoice::CatppuccinLatte,
+            "catppuccin-frappe" => ThemeChoice::CatppuccinFrappe,
+            "catppuccin-macchiato" => ThemeChoice::CatppuccinMacchiato,
+            "catppuccin-mocha" => ThemeChoice::CatppuccinMocha,
+            "rose-pine" => ThemeChoice::RosePine,
+            "rose-pine-moon" => ThemeChoice::RosePineMoon,
+            "rose-pine-dawn" => ThemeChoice::RosePineDawn,
             _ => ThemeChoice::System,
         }
     }
@@ -97,6 +195,9 @@ impl Default for Config {
             hold_delay_ms: default_hold_delay_ms(),
             activation_key: default_activation_key(),
             theme: default_theme(),
+            overlay_opacity: default_overlay_opacity(),
+            overlay_radius: default_overlay_radius(),
+            chip_radius: default_chip_radius(),
         }
     }
 }
@@ -121,12 +222,18 @@ pub fn load_config() -> Config {
                 config
             }
             Err(e) => {
-                eprintln!("[QuickAccent] Failed to parse config: {}. Using defaults.", e);
+                eprintln!(
+                    "[QuickAccent] Failed to parse config: {}. Using defaults.",
+                    e
+                );
                 Config::default()
             }
         },
         Err(_) => {
-            eprintln!("[QuickAccent] No config file found. Creating default at {}", path.display());
+            eprintln!(
+                "[QuickAccent] No config file found. Creating default at {}",
+                path.display()
+            );
             let config = Config::default();
             // Try to create default config file
             if let Some(parent) = path.parent() {
@@ -161,9 +268,17 @@ languages = ["French"]
 # Default: "Both"
 # activation_key = "Both"
 
-# Appearance of the picker and the settings window: "system", "light" or "dark"
+# Appearance of the picker and the settings window:
+#   system, light, dark, dracula,
+#   catppuccin-latte, catppuccin-frappe, catppuccin-macchiato, catppuccin-mocha,
+#   rose-pine, rose-pine-moon, rose-pine-dawn
 # Default: "system"
 # theme = "system"
+
+# Picker overlay (GNOME-style rounded translucent panel), both Linux and macOS.
+# overlay_opacity = 0.88    # 0.35–1.0
+# overlay_radius = 16       # corner radius in px
+# chip_radius = 8           # variant-chip corner radius in px
 "#;
             std::fs::write(&path, default_toml).ok();
             config
@@ -189,7 +304,11 @@ pub fn parse_config_str(contents: &str) -> Result<Config, toml::de::Error> {
 pub fn set_languages(languages: &[String]) -> std::io::Result<()> {
     let value = format!(
         "[{}]",
-        languages.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>().join(", ")
+        languages
+            .iter()
+            .map(|l| format!("{l:?}"))
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     set_value("languages", &value)
 }
@@ -197,6 +316,18 @@ pub fn set_languages(languages: &[String]) -> std::io::Result<()> {
 /// Persist the appearance choice; see [`set_languages`].
 pub fn set_theme(theme: ThemeChoice) -> std::io::Result<()> {
     set_value("theme", &format!("{:?}", theme.as_str()))
+}
+
+pub fn set_activation_key(key: ActivationKey) -> std::io::Result<()> {
+    set_value("activation_key", &format!("{:?}", key.as_str()))
+}
+
+pub fn set_u64(key: &str, value: u64) -> std::io::Result<()> {
+    set_value(key, &value.to_string())
+}
+
+pub fn set_f64(key: &str, value: f64) -> std::io::Result<()> {
+    set_value(key, &format!("{value:.2}"))
 }
 
 fn set_value(key: &str, rendered_value: &str) -> std::io::Result<()> {
@@ -264,6 +395,9 @@ mod tests {
         assert_eq!(c.hold_delay_ms, 250);
         assert_eq!(c.activation_key, "Both");
         assert_eq!(c.activation_key_parsed(), ActivationKey::Both);
+        assert_eq!(c.overlay_opacity, 0.88);
+        assert_eq!(c.overlay_radius, 16.0);
+        assert_eq!(c.chip_radius, 8.0);
     }
 
     #[test]
@@ -286,10 +420,25 @@ mod tests {
             "#,
         )
         .unwrap();
-        assert_eq!(c.languages, vec!["German".to_string(), "Spanish".to_string()]);
+        assert_eq!(
+            c.languages,
+            vec!["German".to_string(), "Spanish".to_string()]
+        );
         assert_eq!(c.input_time_ms, 100);
         assert_eq!(c.hold_delay_ms, 300);
         assert_eq!(c.activation_key_parsed(), ActivationKey::Space);
+        assert_eq!(c.overlay_opacity, 0.88);
+    }
+
+    #[test]
+    fn overlay_style_parses() {
+        let c = parse_config_str(
+            "overlay_opacity = 0.5\noverlay_radius = 20\nchip_radius = 4\n",
+        )
+        .unwrap();
+        assert_eq!(c.overlay_opacity, 0.5);
+        assert_eq!(c.overlay_radius, 20.0);
+        assert_eq!(c.chip_radius, 4.0);
     }
 
     #[test]
@@ -336,18 +485,43 @@ mod tests {
             replace_assignment(none, "languages", "[\"Welsh\"]"),
             "# languages = [\"French\"]\nlanguages_extra = 1\n\nlanguages = [\"Welsh\"]\n"
         );
-        assert_eq!(replace_assignment("", "languages", "[]"), "languages = []\n");
+        assert_eq!(
+            replace_assignment("", "languages", "[]"),
+            "languages = []\n"
+        );
     }
 
     #[test]
     fn theme_round_trips_through_the_file() {
         let doc = "languages = [\"French\"]\n# theme = \"system\"\n";
         let out = replace_assignment(doc, "theme", "\"dark\"");
-        assert_eq!(out, "languages = [\"French\"]\n# theme = \"system\"\n\ntheme = \"dark\"\n");
-        assert_eq!(parse_config_str(&out).unwrap().theme_parsed(), ThemeChoice::Dark);
+        assert_eq!(
+            out,
+            "languages = [\"French\"]\n# theme = \"system\"\n\ntheme = \"dark\"\n"
+        );
+        assert_eq!(
+            parse_config_str(&out).unwrap().theme_parsed(),
+            ThemeChoice::Dark
+        );
         let again = replace_assignment(&out, "theme", "\"light\"");
-        assert_eq!(parse_config_str(&again).unwrap().theme_parsed(), ThemeChoice::Light);
+        assert_eq!(
+            parse_config_str(&again).unwrap().theme_parsed(),
+            ThemeChoice::Light
+        );
         assert_eq!(Config::default().theme_parsed(), ThemeChoice::System);
-        assert_eq!(parse_config_str("theme = \"weird\"\n").unwrap().theme_parsed(), ThemeChoice::System);
+        assert_eq!(
+            parse_config_str("theme = \"weird\"\n")
+                .unwrap()
+                .theme_parsed(),
+            ThemeChoice::System
+        );
+        for choice in ThemeChoice::ALL {
+            assert_eq!(
+                parse_config_str(&format!("theme = {:?}\n", choice.as_str()))
+                    .unwrap()
+                    .theme_parsed(),
+                choice
+            );
+        }
     }
 }

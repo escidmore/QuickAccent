@@ -1,9 +1,9 @@
 use iced::futures::SinkExt;
-use iced::widget::{checkbox, column, container, radio, row, scrollable, text};
+use iced::widget::{checkbox, column, container, pick_list, row, scrollable, slider, text};
 
-use crate::config::ThemeChoice;
+use crate::config::{ActivationKey, ThemeChoice};
 use iced::window;
-use iced::{color, Color, Element, Length, Subscription, Task, Theme};
+use iced::{Color, Element, Length, Subscription, Task, Theme};
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
@@ -15,6 +15,7 @@ static GRAB_RX: OnceLock<Arc<Mutex<Option<UnboundedReceiver<GrabEvent>>>>> = Onc
 #[derive(Debug, Clone, Copy)]
 pub enum UiEvent {
     OpenSettings,
+    Quit,
 }
 
 struct UiChannel {
@@ -26,7 +27,10 @@ fn ui_channel() -> &'static UiChannel {
     static CHANNEL: OnceLock<UiChannel> = OnceLock::new();
     CHANNEL.get_or_init(|| {
         let (tx, rx) = unbounded_channel();
-        UiChannel { tx, rx: Mutex::new(Some(rx)) }
+        UiChannel {
+            tx,
+            rx: Mutex::new(Some(rx)),
+        }
     })
 }
 
@@ -46,30 +50,50 @@ const PADDING: f32 = 28.0;
 const WINDOW_HEIGHT: f32 = 70.0;
 
 fn window_width_for(variants: &[String]) -> f32 {
-    use iced::advanced::{graphics::text::Paragraph, text::{Paragraph as _, Text}};
+    use iced::advanced::{
+        graphics::text::Paragraph,
+        text::{Paragraph as _, Text},
+    };
 
-    PADDING + variants.iter().map(|variant| {
-        let content = variant_label(variant);
-        let paragraph = Paragraph::with_text(Text {
-            content: &content,
-            bounds: iced::Size::INFINITY,
-            size: TEXT_SIZE.into(),
-            line_height: Default::default(),
-            font: iced::Font::DEFAULT,
-            horizontal_alignment: iced::alignment::Horizontal::Left,
-            vertical_alignment: iced::alignment::Vertical::Top,
-            shaping: text::Shaping::Advanced,
-            wrapping: text::Wrapping::None,
-        });
-        paragraph.min_bounds().width.ceil() + 2.0 * CELL_PADDING + CELL_SPACING
-    }).sum::<f32>()
+    PADDING
+        + variants
+            .iter()
+            .map(|variant| {
+                let content = variant_label(variant);
+                let paragraph = Paragraph::with_text(Text {
+                    content: &content,
+                    bounds: iced::Size::INFINITY,
+                    size: TEXT_SIZE.into(),
+                    line_height: Default::default(),
+                    font: iced::Font::DEFAULT,
+                    horizontal_alignment: iced::alignment::Horizontal::Left,
+                    vertical_alignment: iced::alignment::Vertical::Top,
+                    shaping: text::Shaping::Advanced,
+                    wrapping: text::Wrapping::None,
+                });
+                paragraph.min_bounds().width.ceil() + 2.0 * CELL_PADDING + CELL_SPACING
+            })
+            .sum::<f32>()
 }
 
 fn variant_label(ch: &str) -> String {
     // Display-only bases make combining marks visible. LRM prevents iced's
     // shrink-width labels from clipping RTL glyphs at the far edge.
-    let base = if matches!(ch.chars().next(),
-        Some('\u{0300}'..='\u{036f}' | '\u{05b0}'..='\u{05bd}' | '\u{05bf}' | '\u{05c1}' | '\u{05c2}' | '\u{05c7}')) { "◌" } else { "" };
+    let base = if matches!(
+        ch.chars().next(),
+        Some(
+            '\u{0300}'..='\u{036f}'
+            | '\u{05b0}'..='\u{05bd}'
+            | '\u{05bf}'
+            | '\u{05c1}'
+            | '\u{05c2}'
+            | '\u{05c7}',
+        )
+    ) {
+        "◌"
+    } else {
+        ""
+    };
     format!("\u{200e}{base}{ch}")
 }
 
@@ -116,8 +140,25 @@ mod tests {
 
     #[test]
     fn symbol_glyphs_stay_inside_the_visible_label() {
-        use iced::advanced::{text::{Paragraph as _, Text}, graphics::text::Paragraph};
-        for variant in ["﷼", "؋", "°C", "°F", "V\u{0307}", "…", "\u{0301}", "SS", "א", "אַ", "ײַ", "דזש", "\u{05b7}"] {
+        use iced::advanced::{
+            graphics::text::Paragraph,
+            text::{Paragraph as _, Text},
+        };
+        for variant in [
+            "﷼",
+            "؋",
+            "°C",
+            "°F",
+            "V\u{0307}",
+            "…",
+            "\u{0301}",
+            "SS",
+            "א",
+            "אַ",
+            "ײַ",
+            "דזש",
+            "\u{05b7}",
+        ] {
             let content = variant_label(variant);
             let paragraph = Paragraph::with_text(Text {
                 content: &content,
@@ -131,14 +172,24 @@ mod tests {
                 wrapping: Default::default(),
             });
             let visible_width = paragraph.min_bounds().width;
-            let glyphs: Vec<_> = paragraph.buffer().layout_runs().flat_map(|run| run.glyphs).collect();
+            let glyphs: Vec<_> = paragraph
+                .buffer()
+                .layout_runs()
+                .flat_map(|run| run.glyphs)
+                .collect();
             assert!(!glyphs.is_empty());
-            assert!(glyphs.iter().all(|g| g.x >= 0.0 && g.x + g.w <= visible_width + 0.1),
-                "{content:?}: glyphs outside visible width {visible_width}");
+            assert!(
+                glyphs
+                    .iter()
+                    .all(|g| g.x >= 0.0 && g.x + g.w <= visible_width + 0.1),
+                "{content:?}: glyphs outside visible width {visible_width}"
+            );
             let row = vec![variant.to_string(); 4];
             let required_width = 20.0 + 4.0 * (visible_width + 28.0) + 3.0 * 4.0;
-            assert!(window_width_for(&row) >= required_width,
-                "{variant:?}: shaped row is wider than the overlay window");
+            assert!(
+                window_width_for(&row) >= required_width,
+                "{variant:?}: shaped row is wider than the overlay window"
+            );
         }
     }
 
@@ -164,7 +215,10 @@ mod tests {
         }
         // An unavailable focused window must clear the previous anchor.
         set_overlay_anchor(None);
-        assert!(matches!(overlay_position(200.0), window::Position::Centered));
+        assert!(matches!(
+            overlay_position(200.0),
+            window::Position::Centered
+        ));
     }
 }
 
@@ -177,8 +231,16 @@ pub enum Message {
     WindowOpened(window::Id),
     WindowClosed(window::Id),
     OpenSettings,
+    Quit,
     ToggleLanguage(String, bool),
     SetTheme(ThemeChoice),
+    SetHoldDelay(f32),
+    SetInputTime(f32),
+    SetActivationKey(ActivationKey),
+    SetOverlayOpacity(f32),
+    SetOverlayRadius(f32),
+    SetChipRadius(f32),
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     Noop,
 }
 
@@ -194,19 +256,33 @@ pub struct App {
     /// Resolved appearance for the open windows (macOS glass adapts to what is
     /// behind it; our text has to follow).
     dark: bool,
+    hold_delay_ms: u64,
+    input_time_ms: u64,
+    activation_key: ActivationKey,
+    overlay_opacity: f32,
+    overlay_radius: f32,
+    chip_radius: f32,
 }
 
-/// Whether windows should render dark for `choice`, sampling the system
-/// appearance for `System` (macOS only; other platforms keep light).
 fn resolve_dark(choice: ThemeChoice) -> bool {
-    match choice {
-        ThemeChoice::Light => false,
-        ThemeChoice::Dark => true,
-        #[cfg(target_os = "macos")]
-        ThemeChoice::System => crate::macos::is_dark_appearance(),
-        #[cfg(not(target_os = "macos"))]
-        ThemeChoice::System => false,
-    }
+    crate::theme::is_dark(choice)
+}
+
+fn settings_slider<'a>(
+    label: &str,
+    value: String,
+    sl: Element<'a, Message>,
+) -> Element<'a, Message> {
+    column(vec![
+        row(vec![
+            text(label.to_string()).size(13).width(Length::Fill).into(),
+            text(value).size(13).into(),
+        ])
+        .into(),
+        sl,
+    ])
+    .spacing(4)
+    .into()
 }
 
 impl App {
@@ -226,15 +302,24 @@ impl App {
             Ok("settings") => Task::done(Message::OpenSettings),
             _ => Task::none(),
         };
+        let cfg = crate::config::read_config().unwrap_or_default();
+        let theme_choice = cfg.theme_parsed();
+        let activation_key = cfg.activation_key_parsed();
         (
             App {
                 variants: Vec::new(),
                 selected_index: 0,
                 overlay_window: None,
                 settings_window: None,
-                languages: Vec::new(),
-                theme_choice: ThemeChoice::System,
-                dark: false,
+                languages: cfg.languages,
+                theme_choice,
+                dark: resolve_dark(theme_choice),
+                hold_delay_ms: cfg.hold_delay_ms,
+                input_time_ms: cfg.input_time_ms,
+                activation_key,
+                overlay_opacity: cfg.overlay_opacity as f32,
+                overlay_radius: cfg.overlay_radius as f32,
+                chip_radius: cfg.chip_radius as f32,
             },
             boot,
         )
@@ -259,11 +344,17 @@ impl App {
 
     /// Re-read appearance from config (it may have been edited by hand) and
     /// resolve it for the windows about to open.
-    fn refresh_appearance(&mut self) {
-        self.theme_choice = crate::config::read_config()
-            .map(|c| c.theme_parsed())
-            .unwrap_or(ThemeChoice::System);
+    fn refresh_from_config(&mut self) {
+        let cfg = crate::config::read_config().unwrap_or_default();
+        self.theme_choice = cfg.theme_parsed();
         self.dark = resolve_dark(self.theme_choice);
+        self.hold_delay_ms = cfg.hold_delay_ms;
+        self.input_time_ms = cfg.input_time_ms;
+        self.activation_key = cfg.activation_key_parsed();
+        self.overlay_opacity = cfg.overlay_opacity as f32;
+        self.overlay_radius = cfg.overlay_radius as f32;
+        self.chip_radius = cfg.chip_radius as f32;
+        self.languages = cfg.languages;
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -280,7 +371,7 @@ impl App {
 
                 #[cfg(target_os = "macos")]
                 set_overlay_anchor(crate::macos::focused_window_rect());
-                self.refresh_appearance();
+                self.refresh_from_config();
 
                 let settings = overlay_settings(width);
                 log::debug!("opening overlay window at {:?}", settings.position);
@@ -309,10 +400,20 @@ impl App {
                     // Runs on the event-loop thread before the first frame is
                     // shown, so the glass is there from the start.
                     let dark = self.dark;
+                    let radius = self.overlay_radius as f64;
+                    let glass = crate::theme::uses_glass();
                     return window::run_with_handle(id, move |handle| {
                         use iced::window::raw_window_handle::RawWindowHandle;
                         if let RawWindowHandle::AppKit(appkit) = handle.as_raw() {
-                            crate::macos::attach_glass_backdrop(appkit.ns_view.as_ptr(), dark);
+                            if glass {
+                                crate::macos::attach_glass_backdrop(
+                                    appkit.ns_view.as_ptr(),
+                                    dark,
+                                    radius,
+                                );
+                            } else {
+                                crate::macos::apply_window_appearance(appkit.ns_view.as_ptr(), dark);
+                            }
                         }
                     })
                     .map(|_| Message::Noop);
@@ -321,7 +422,10 @@ impl App {
                     #[cfg(target_os = "macos")]
                     {
                         crate::macos::activate_app();
-                        return Task::batch([self.sync_settings_appearance(), window::gain_focus(id)]);
+                        return Task::batch([
+                            self.sync_settings_appearance(),
+                            window::gain_focus(id),
+                        ]);
                     }
                     #[cfg(not(target_os = "macos"))]
                     return window::gain_focus(id);
@@ -344,12 +448,9 @@ impl App {
                     crate::macos::activate_app();
                     return window::gain_focus(id);
                 }
-                self.languages = crate::config::read_config()
-                    .map(|c| c.languages)
-                    .unwrap_or_else(|| crate::config::Config::default().languages);
-                self.refresh_appearance();
+                self.refresh_from_config();
                 let (id, open_task) = window::open(window::Settings {
-                    size: iced::Size::new(560.0, 640.0),
+                    size: iced::Size::new(560.0, 720.0),
                     min_size: Some(iced::Size::new(420.0, 360.0)),
                     position: window::Position::Centered,
                     level: window::Level::Normal,
@@ -359,6 +460,7 @@ impl App {
                 self.settings_window = Some(id);
                 open_task.map(Message::WindowOpened)
             }
+            Message::Quit => iced::exit(),
             Message::ToggleLanguage(name, enabled) => {
                 log::debug!("toggle {name} -> {enabled}");
                 if enabled {
@@ -384,6 +486,67 @@ impl App {
                 }
                 self.sync_settings_appearance()
             }
+            Message::SetHoldDelay(ms) => {
+                self.hold_delay_ms = ms.round().clamp(50.0, 800.0) as u64;
+                crate::grab::set_live(
+                    self.input_time_ms,
+                    self.hold_delay_ms,
+                    self.activation_key,
+                );
+                if let Err(e) = crate::config::set_u64("hold_delay_ms", self.hold_delay_ms) {
+                    eprintln!("[QuickAccent] Failed to save hold_delay_ms: {e}");
+                }
+                Task::none()
+            }
+            Message::SetInputTime(ms) => {
+                self.input_time_ms = ms.round().clamp(50.0, 800.0) as u64;
+                crate::grab::set_live(
+                    self.input_time_ms,
+                    self.hold_delay_ms,
+                    self.activation_key,
+                );
+                if let Err(e) = crate::config::set_u64("input_time_ms", self.input_time_ms) {
+                    eprintln!("[QuickAccent] Failed to save input_time_ms: {e}");
+                }
+                Task::none()
+            }
+            Message::SetActivationKey(key) => {
+                self.activation_key = key;
+                crate::grab::set_live(
+                    self.input_time_ms,
+                    self.hold_delay_ms,
+                    self.activation_key,
+                );
+                if let Err(e) = crate::config::set_activation_key(key) {
+                    eprintln!("[QuickAccent] Failed to save activation_key: {e}");
+                }
+                Task::none()
+            }
+            Message::SetOverlayOpacity(v) => {
+                self.overlay_opacity = v.clamp(0.35, 1.0);
+                if let Err(e) =
+                    crate::config::set_f64("overlay_opacity", self.overlay_opacity as f64)
+                {
+                    eprintln!("[QuickAccent] Failed to save overlay_opacity: {e}");
+                }
+                Task::none()
+            }
+            Message::SetOverlayRadius(v) => {
+                self.overlay_radius = v.clamp(0.0, 28.0);
+                if let Err(e) =
+                    crate::config::set_f64("overlay_radius", self.overlay_radius as f64)
+                {
+                    eprintln!("[QuickAccent] Failed to save overlay_radius: {e}");
+                }
+                Task::none()
+            }
+            Message::SetChipRadius(v) => {
+                self.chip_radius = v.clamp(0.0, 16.0);
+                if let Err(e) = crate::config::set_f64("chip_radius", self.chip_radius as f64) {
+                    eprintln!("[QuickAccent] Failed to save chip_radius: {e}");
+                }
+                Task::none()
+            }
             Message::Noop => Task::none(),
         }
     }
@@ -399,60 +562,69 @@ impl App {
                 .into();
         }
 
-        // macOS: chips float on the glass backdrop, tinted for the current
-        // appearance. Elsewhere: the opaque dark panel.
-        let glass = cfg!(target_os = "macos");
-        let (chip, chip_text, selected) = match (glass, self.dark) {
-            (true, true) => (color!(0xFFFFFF, 0.16), color!(0xFFFFFF), color!(0x0A84FF)),
-            (true, false) => (color!(0x000000, 0.08), color!(0x1C1C1E), color!(0x007AFF)),
-            (false, _) => (color!(0x3C3C3C), color!(0xCCCCCC), color!(0x4A90D9)),
-        };
+        let colors =
+            crate::theme::overlay_colors(self.theme_choice, self.dark, self.overlay_opacity);
+        let chip = colors.chip;
+        let chip_text = colors.chip_text;
+        let selected = colors.selected;
+        let selected_text = colors.selected_text;
+        let panel = colors.panel;
+        let chip_radius = self.chip_radius;
+        let overlay_radius = self.overlay_radius;
 
-        let cells: Vec<Element<Message>> = self
-            .variants
-            .iter()
-            .enumerate()
-            .map(|(i, ch)| {
-                let is_selected = i == self.selected_index;
-                let label = text(variant_label(ch))
-                    .size(TEXT_SIZE)
-                    .font(iced::Font::DEFAULT)
-                    .shaping(text::Shaping::Advanced)
-                    .wrapping(text::Wrapping::None);
+        let cells: Vec<Element<Message>> =
+            self.variants
+                .iter()
+                .enumerate()
+                .map(|(i, ch)| {
+                    let is_selected = i == self.selected_index;
+                    let label = text(variant_label(ch))
+                        .size(TEXT_SIZE)
+                        .font(iced::Font::DEFAULT)
+                        .shaping(text::Shaping::Advanced)
+                        .wrapping(text::Wrapping::None);
 
-                let cell = container(label)
-                    .padding([8.0, CELL_PADDING])
-                    .style(move |_theme: &Theme| container::Style {
-                        background: Some(iced::Background::Color(if is_selected {
-                            selected
-                        } else {
-                            chip
-                        })),
-                        border: iced::Border {
-                            radius: 8.0.into(),
+                    let cell = container(label).padding([8.0, CELL_PADDING]).style(
+                        move |_theme: &Theme| container::Style {
+                            background: Some(iced::Background::Color(if is_selected {
+                                selected
+                            } else {
+                                chip
+                            })),
+                            border: iced::Border {
+                                radius: chip_radius.into(),
+                                ..Default::default()
+                            },
+                            text_color: Some(if is_selected {
+                                selected_text
+                            } else {
+                                chip_text
+                            }),
                             ..Default::default()
                         },
-                        text_color: Some(if is_selected { color!(0xFFFFFF) } else { chip_text }),
-                        ..Default::default()
-                    });
+                    );
 
-                cell.into()
-            })
-            .collect();
+                    cell.into()
+                })
+                .collect();
 
-        container(row(cells).spacing(CELL_SPACING).align_y(iced::Alignment::Center))
-            .padding(10)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .style(move |_theme: &Theme| container::Style {
-                background: (!glass).then_some(iced::Background::Color(color!(0x2D2D2D, 0.95))),
-                border: iced::Border {
-                    radius: 12.0.into(),
-                    ..Default::default()
-                },
+        container(
+            row(cells)
+                .spacing(CELL_SPACING)
+                .align_y(iced::Alignment::Center),
+        )
+        .padding(10)
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .style(move |_theme: &Theme| container::Style {
+            background: panel.map(iced::Background::Color),
+            border: iced::Border {
+                radius: overlay_radius.into(),
                 ..Default::default()
-            })
-            .into()
+            },
+            ..Default::default()
+        })
+        .into()
     }
 
     fn settings_view(&self) -> Element<'_, Message> {
@@ -485,15 +657,58 @@ impl App {
 
         let appearance: Element<'_, Message> = column(vec![
             text("Appearance").size(15).into(),
-            row(ThemeChoice::ALL
-                .iter()
-                .map(|&choice| {
-                    radio(choice.label(), choice, Some(self.theme_choice), Message::SetTheme)
-                        .width(Length::Fill)
-                        .into()
-                })
-                .collect::<Vec<Element<Message>>>())
-            .spacing(8)
+            pick_list(ThemeChoice::ALL, Some(self.theme_choice), Message::SetTheme)
+                .width(Length::Fill)
+                .into(),
+            settings_slider(
+                "Overlay opacity",
+                format!("{:.0}%", self.overlay_opacity * 100.0),
+                slider(
+                    35.0..=100.0,
+                    self.overlay_opacity * 100.0,
+                    |v| Message::SetOverlayOpacity(v / 100.0),
+                )
+                .into(),
+            ),
+            settings_slider(
+                "Corner radius",
+                format!("{:.0} px", self.overlay_radius),
+                slider(0.0..=28.0, self.overlay_radius, Message::SetOverlayRadius).into(),
+            ),
+            settings_slider(
+                "Chip radius",
+                format!("{:.0} px", self.chip_radius),
+                slider(0.0..=16.0, self.chip_radius, Message::SetChipRadius).into(),
+            ),
+        ])
+        .spacing(10)
+        .into();
+
+        let behaviour: Element<'_, Message> = column(vec![
+            text("Behaviour").size(15).into(),
+            settings_slider(
+                "Hold delay",
+                format!("{} ms", self.hold_delay_ms),
+                slider(50.0..=800.0, self.hold_delay_ms as f32, Message::SetHoldDelay).into(),
+            ),
+            text("How long to hold a letter before Space shows the picker.")
+                .size(11)
+                .into(),
+            settings_slider(
+                "Input time",
+                format!("{} ms", self.input_time_ms),
+                slider(50.0..=800.0, self.input_time_ms as f32, Message::SetInputTime).into(),
+            ),
+            text("Minimum hold before a picked accent is committed.")
+                .size(11)
+                .into(),
+            text("Activation key").size(13).into(),
+            pick_list(
+                ActivationKey::ALL,
+                Some(self.activation_key),
+                Message::SetActivationKey,
+            )
+            .width(Length::Fill)
             .into(),
         ])
         .spacing(8)
@@ -505,6 +720,7 @@ impl App {
                 .size(13)
                 .into(),
             appearance,
+            behaviour,
             section("Languages", crate::mappings::LANGUAGES),
             section("Symbol sets", crate::mappings::SYMBOL_SETS),
             text(format!(
@@ -535,23 +751,15 @@ impl App {
         ])
     }
 
-    pub fn theme(&self, window_id: window::Id) -> Theme {
-        if self.settings_window == Some(window_id) {
-            if self.dark { Theme::Dark } else { Theme::Light }
-        } else {
-            Theme::CatppuccinMocha
-        }
+    pub fn theme(&self, _window_id: window::Id) -> Theme {
+        crate::theme::iced_theme(self.theme_choice, self.dark)
     }
 
-    /// Window backgrounds. On macOS the picker window is see-through so the
-    /// glass backdrop shows; the settings window paints its own background.
+    /// Window backgrounds. The picker is see-through so rounded corners and
+    /// (on macOS) glass show; the settings window paints its own background.
     pub fn style(&self, theme: &Theme) -> iced::daemon::Appearance {
         iced::daemon::Appearance {
-            background_color: if cfg!(target_os = "macos") {
-                Color::TRANSPARENT
-            } else {
-                theme.palette().background
-            },
+            background_color: Color::TRANSPARENT,
             text_color: theme.palette().text,
         }
     }
@@ -559,10 +767,16 @@ impl App {
 
 fn ui_subscription() -> impl iced::futures::Stream<Item = Message> {
     iced::stream::channel(8, |mut output| async move {
-        let mut rx = ui_channel().rx.lock().unwrap().take().expect("ui channel already taken");
+        let mut rx = ui_channel()
+            .rx
+            .lock()
+            .unwrap()
+            .take()
+            .expect("ui channel already taken");
         while let Some(event) = rx.recv().await {
             let msg = match event {
                 UiEvent::OpenSettings => Message::OpenSettings,
+                UiEvent::Quit => Message::Quit,
             };
             output.send(msg).await.ok();
         }
@@ -583,9 +797,7 @@ fn grab_subscription() -> impl iced::futures::Stream<Item = Message> {
         // its thread died) — stop instead of busy-looping on a closed channel.
         while let Some(event) = rx.recv().await {
             let msg = match event {
-                GrabEvent::ShowOverlay { variants, index } => {
-                    Message::ShowOverlay(variants, index)
-                }
+                GrabEvent::ShowOverlay { variants, index } => Message::ShowOverlay(variants, index),
                 GrabEvent::UpdateSelection(index) => Message::UpdateSelection(index),
                 GrabEvent::HideOverlay => Message::HideOverlay,
                 GrabEvent::InjectChar(_) => Message::InjectChar,

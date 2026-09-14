@@ -10,15 +10,12 @@ use objc::{class, msg_send, sel, sel_impl};
 use std::ffi::c_void;
 use std::sync::OnceLock;
 
-/// Corner radius of the picker's glass backdrop, in points.
-const OVERLAY_CORNER_RADIUS: f64 = 14.0;
-
 /// Put a Liquid Glass backdrop (macOS 26+ `NSGlassEffectView`; a blur
 /// `NSVisualEffectView` before that) under the picker's content. `ns_view` is
 /// winit's content view and must stay the window's `contentView` — winit casts
 /// it back to its own type — so the backdrop is added as a sibling ordered
 /// below it and iced paints a transparent background over it.
-pub fn attach_glass_backdrop(ns_view: *mut c_void, dark: bool) {
+pub fn attach_glass_backdrop(ns_view: *mut c_void, dark: bool, radius: f64) {
     unsafe {
         let view = ns_view as id;
         let window: id = msg_send![view, window];
@@ -41,7 +38,7 @@ pub fn attach_glass_backdrop(ns_view: *mut c_void, dark: bool) {
             Some(glass) => {
                 let v: id = msg_send![glass, alloc];
                 let v: id = msg_send![v, initWithFrame: frame];
-                let _: () = msg_send![v, setCornerRadius: OVERLAY_CORNER_RADIUS];
+                let _: () = msg_send![v, setCornerRadius: radius];
                 v
             }
             None => {
@@ -52,7 +49,7 @@ pub fn attach_glass_backdrop(ns_view: *mut c_void, dark: bool) {
                 let _: () = msg_send![v, setState: 1i64]; // active
                 let _: () = msg_send![v, setWantsLayer: true];
                 let layer: id = msg_send![v, layer];
-                let _: () = msg_send![layer, setCornerRadius: OVERLAY_CORNER_RADIUS];
+                let _: () = msg_send![layer, setCornerRadius: radius];
                 let _: () = msg_send![layer, setMasksToBounds: true];
                 v
             }

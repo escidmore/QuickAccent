@@ -6,7 +6,7 @@ After=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/quickaccent
+ExecStart=/usr/bin/quickaccent
 Restart=on-failure
 RestartSec=2
 Environment=PATH=/usr/bin:/usr/local/bin:%h/.local/bin
