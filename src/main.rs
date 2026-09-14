@@ -1,23 +1,26 @@
 mod app;
 mod config;
+#[cfg(target_os = "linux")]
+mod dbus_service;
 mod grab;
-mod injection;
-mod mappings;
-mod state_machine;
 #[cfg(target_os = "linux")]
 mod hyprland;
+mod injection;
+#[cfg(target_os = "macos")]
+mod macos;
+mod mappings;
 #[cfg(target_os = "linux")]
 mod portal_keysym;
 #[cfg(target_os = "linux")]
 mod shell_ext;
+mod state_machine;
+mod theme;
 #[cfg(target_os = "linux")]
 mod virtual_kb;
 #[cfg(target_os = "linux")]
 mod xkb_custom;
 #[cfg(target_os = "linux")]
 mod xkb_map;
-#[cfg(target_os = "macos")]
-mod macos;
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -82,6 +85,9 @@ fn main() -> iced::Result {
 
     #[cfg(target_os = "linux")]
     linux_setup();
+
+    #[cfg(target_os = "linux")]
+    crate::dbus_service::start();
 
     // QUICKACCENT_DEMO opens a window for inspection; a second instance must
     // not also take over the keyboard.
@@ -220,7 +226,10 @@ fn acquire_single_instance_lock() -> bool {
             Err(std::fs::TryLockError::WouldBlock) => {}
             Err(_) => return true,
         }
-        let holder = std::fs::read_to_string(&path).unwrap_or_default().trim().to_string();
+        let holder = std::fs::read_to_string(&path)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
         let running_as_service = std::env::var_os("INVOCATION_ID").is_some();
         if running_as_service && attempts < 10 {
             if attempts == 0 {
@@ -298,9 +307,10 @@ fn start_config_watcher() {
         for res in rx {
             match res {
                 Ok(event) => {
-                    let relevant = event.paths.iter().any(|p| {
-                        p.file_name().map_or(false, |n| n == "config.toml")
-                    });
+                    let relevant = event
+                        .paths
+                        .iter()
+                        .any(|p| p.file_name().map_or(false, |n| n == "config.toml"));
                     if !relevant {
                         continue;
                     }
@@ -311,7 +321,15 @@ fn start_config_watcher() {
                     last_reload = now;
                     if let Some(cfg) = config::read_config() {
                         mappings::reload(&cfg.languages);
-                        eprintln!("[QuickAccent] Reloaded config: languages = {:?}", cfg.languages);
+                        grab::set_live(
+                            cfg.input_time_ms,
+                            cfg.hold_delay_ms,
+                            cfg.activation_key_parsed(),
+                        );
+                        eprintln!(
+                            "[QuickAccent] Reloaded config: languages = {:?}",
+                            cfg.languages
+                        );
                         // New languages may need new keymap slots / the portal.
                         #[cfg(target_os = "linux")]
                         setup_direct_typing();

@@ -144,6 +144,17 @@ impl StateMachine {
         }
     }
 
+    pub fn set_timing(
+        &mut self,
+        input_time_ms: u64,
+        hold_delay_ms: u64,
+        activation_key: ActivationKey,
+    ) {
+        self.input_time = Duration::from_millis(input_time_ms);
+        self.hold_delay = Duration::from_millis(hold_delay_ms);
+        self.activation_key = activation_key;
+    }
+
     /// Check if the given input is an allowed trigger for entering Selecting state.
     fn is_trigger(&self, input: KeyInput) -> bool {
         match self.activation_key {

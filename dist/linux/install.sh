@@ -3,21 +3,29 @@
 set -euo pipefail
 
 REPO="${GITHUB_REPO:-victormasson/QuickAccent}"
-# Default: newest stable release. QUICKACCENT_VERSION=continuous pulls the
-# rolling build from master; or pin a tag such as v1.0.0.
-RELEASE_TAG="${QUICKACCENT_VERSION:-latest}"
 ASSET="quickaccent-linux-x86_64.tar.gz"
+SUMS="SHA256SUMS"
 BIN_DIR="${PREFIX:-$HOME/.local}/bin"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 ICON_BASE="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
-# Piped to bash (curl | bash) there is no script file: BASH_SOURCE is unset,
-# which `set -u` would report as an error. No source tree then — the release
-# asset carries everything.
+# Run from a checkout (./dist/linux/install.sh). Without a source tree the
+# release asset carries everything.
 if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
   ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd 2>/dev/null || true)"
 else
   ROOT=""
+fi
+
+# Release to install. Default: the version of the checkout you run this from
+# (so script and asset are the same reviewed tag); `latest` = newest stable,
+# `continuous` = rolling build from master, or any tag such as v1.2.0.
+if [[ -n "${QUICKACCENT_VERSION:-}" ]]; then
+  RELEASE_TAG="$QUICKACCENT_VERSION"
+elif [[ -n "$ROOT" && -f "$ROOT/Cargo.toml" ]]; then
+  RELEASE_TAG="v$(sed -n 's/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)"
+else
+  RELEASE_TAG="latest"
 fi
 
 arch="$(uname -m)"
@@ -31,21 +39,56 @@ tmpdir="$(mktemp -d)"
 cleanup() { rm -rf "$tmpdir"; }
 trap cleanup EXIT
 
-fetch_release() {
-  local url
+release_url() {
   if [[ "$RELEASE_TAG" == "latest" ]]; then
-    url="https://github.com/${REPO}/releases/latest/download/${ASSET}"
+    echo "https://github.com/${REPO}/releases/latest/download/$1"
   else
-    url="https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${ASSET}"
+    echo "https://github.com/${REPO}/releases/download/${RELEASE_TAG}/$1"
   fi
+}
+
+download() {
+  local url="$1" out="$2"
   echo "==> Download $url"
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$url" -o "$tmpdir/$ASSET"
+    curl -fsSL "$url" -o "$out"
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO "$tmpdir/$ASSET" "$url"
+    wget -qO "$out" "$url"
   else
     return 1
   fi
+}
+
+# The archive is only extracted after its sha256 matches the SHA256SUMS file
+# published with the release. QUICKACCENT_SKIP_VERIFY=1 bypasses this for
+# releases older than v1.2.0, which shipped no checksum file.
+verify_release() {
+  if [[ "${QUICKACCENT_SKIP_VERIFY:-0}" == "1" ]]; then
+    echo "warning: QUICKACCENT_SKIP_VERIFY=1, checksum not verified" >&2
+    return 0
+  fi
+  if ! download "$(release_url "$SUMS")" "$tmpdir/$SUMS"; then
+    echo "error: $SUMS not found for $RELEASE_TAG; refusing to install an unverified asset." >&2
+    echo "       (QUICKACCENT_SKIP_VERIFY=1 to override for pre-1.2.0 releases)" >&2
+    exit 1
+  fi
+  echo "==> Verify sha256"
+  (cd "$tmpdir" && sha256sum -c --ignore-missing --status "$SUMS") \
+    || { echo "error: sha256 mismatch for $ASSET" >&2; exit 1; }
+  grep -q "$ASSET" "$tmpdir/$SUMS" || { echo "error: $ASSET missing from $SUMS" >&2; exit 1; }
+  # Sigstore build provenance (GitHub Actions attestation), when gh is set up.
+  if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+    echo "==> Verify build provenance"
+    gh attestation verify "$tmpdir/$ASSET" --repo "$REPO" \
+      || { echo "error: build provenance verification failed" >&2; exit 1; }
+  else
+    echo "    (install + login to gh to also verify the Sigstore attestation)"
+  fi
+}
+
+fetch_release() {
+  download "$(release_url "$ASSET")" "$tmpdir/$ASSET" || return 1
+  verify_release
 }
 
 build_from_source() {
