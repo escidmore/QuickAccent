@@ -73,7 +73,10 @@ fn description_bounds(description: &str, width: f32) -> iced::Size {
     }).min_bounds()
 }
 
-fn overlay_size_for(variants: &[String], items_per_page: usize) -> iced::Size {
+fn overlay_size_for(variants: &[String], items_per_page: usize, show_unicode_description: bool) -> iced::Size {
+    if !show_unicode_description {
+        return iced::Size::new(window_width_for(variants, items_per_page), PICKER_ROW_HEIGHT);
+    }
     let descriptions: Vec<_> = variants.iter().map(|v| character_description(v)).collect();
     let longest = descriptions.iter()
         .map(|d| description_bounds(d, f32::INFINITY).width.ceil() + PADDING)
@@ -218,6 +221,7 @@ mod tests {
         // An existing logical window makes update return tasks without opening a native window.
         let mut app = App {
             items_per_page: 1,
+            show_unicode_description: true,
             description_height: 0.0,
             variants: Vec::new(),
             selected_index: 0,
@@ -237,6 +241,14 @@ mod tests {
         // Shift replaces the variant list through ShowOverlay, preserving the selected index.
         let _ = app.update(Message::ShowOverlay(vec!["Ţ".into(), "אַ".into()], 0));
         assert_eq!(app.selected_description(), "(U+0162) LATIN CAPITAL LETTER T WITH CEDILLA");
+        let id = app.overlay_window.unwrap();
+        // Inspect the generated widget tree without opening or rendering a desktop window.
+        assert_eq!(app.view(id).as_widget().children().len(), 2);
+        app.show_unicode_description = false;
+        let _ = app.update(Message::ShowOverlay(vec!["Ţ".into(), "אַ".into()], 0));
+        assert_eq!(app.description_height, 0.0);
+        assert_eq!(app.view(id).as_widget().children().len(), 1);
+        assert_eq!(app.variants, ["Ţ", "אַ"]);
         let _ = app.update(Message::HideOverlay);
         assert!(app.selected_description().is_empty());
     }
@@ -246,7 +258,7 @@ mod tests {
         let variants: Vec<_> = ["ţ", "אַ", "דזש", "𑪰", "\u{0301}", "°C"]
             .into_iter().map(String::from).collect();
         for page_size in [0, 1, 2, 12] {
-            let size = overlay_size_for(&variants, page_size);
+            let size = overlay_size_for(&variants, page_size, true);
             assert!(size.width >= window_width_for(&variants, page_size));
             assert!(size.height > PICKER_ROW_HEIGHT);
             for variant in &variants {
@@ -254,9 +266,13 @@ mod tests {
                 assert!(bounds.width <= size.width - 20.0);
                 assert!(bounds.height <= size.height - PICKER_ROW_HEIGHT - DESCRIPTION_SPACING);
             }
+            assert_eq!(
+                overlay_size_for(&variants, page_size, false),
+                iced::Size::new(window_width_for(&variants, page_size), PICKER_ROW_HEIGHT),
+            );
         }
-        let single = overlay_size_for(&["ţ".into()], 1);
-        let sequence = overlay_size_for(&["t\u{0301}\u{0308}\u{0304}".into()], 1);
+        let single = overlay_size_for(&["ţ".into()], 1, true);
+        let sequence = overlay_size_for(&["t\u{0301}\u{0308}\u{0304}".into()], 1, true);
         assert!(sequence.height > single.height, "long descriptions must wrap instead of clipping");
         assert!(sequence.width <= DESCRIPTION_MAX_WIDTH);
     }
@@ -429,6 +445,7 @@ pub enum Message {
 
 pub struct App {
     items_per_page: usize,
+    show_unicode_description: bool,
     description_height: f32,
     variants: Vec<String>,
     selected_index: usize,
@@ -457,7 +474,7 @@ fn resolve_dark(choice: ThemeChoice) -> bool {
 }
 
 impl App {
-    pub fn new(grab_rx: Arc<Mutex<Option<UnboundedReceiver<GrabEvent>>>>, items_per_page: usize) -> (Self, Task<Message>) {
+    pub fn new(grab_rx: Arc<Mutex<Option<UnboundedReceiver<GrabEvent>>>>, items_per_page: usize, show_unicode_description: bool) -> (Self, Task<Message>) {
         GRAB_RX.set(grab_rx).ok();
         // Development aid: QUICKACCENT_DEMO=overlay|settings opens that window
         // at startup without needing the keyboard grab (or its permissions).
@@ -476,6 +493,7 @@ impl App {
         (
             App {
                 items_per_page,
+                show_unicode_description,
                 description_height: 0.0,
                 variants: Vec::new(),
                 selected_index: 0,
@@ -519,9 +537,13 @@ impl App {
         match message {
             Message::ShowOverlay(variants, index) => {
                 self.selected_index = index;
-                let old_size = overlay_size_for(&self.variants, self.items_per_page);
-                let size = overlay_size_for(&variants, self.items_per_page);
-                self.description_height = size.height - PICKER_ROW_HEIGHT - DESCRIPTION_SPACING;
+                let old_size = overlay_size_for(&self.variants, self.items_per_page, self.show_unicode_description);
+                let size = overlay_size_for(&variants, self.items_per_page, self.show_unicode_description);
+                self.description_height = if self.show_unicode_description {
+                    size.height - PICKER_ROW_HEIGHT - DESCRIPTION_SPACING
+                } else {
+                    0.0
+                };
                 self.variants = variants;
 
                 if let Some(id) = self.overlay_window {
@@ -728,21 +750,24 @@ impl App {
             );
         }
 
-        let description = text(self.selected_description())
-            .size(DESCRIPTION_SIZE)
-            .font(iced::Font::DEFAULT)
-            .shaping(text::Shaping::Advanced)
-            .wrapping(text::Wrapping::Word)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center)
-            .width(Length::Fill)
-            .height(self.description_height)
-            .color(chip_text);
+        let mut content = column![row(cells).spacing(CELL_SPACING).align_y(iced::Alignment::Center)]
+            .spacing(DESCRIPTION_SPACING)
+            .align_x(iced::Alignment::Center);
+        if self.show_unicode_description {
+            let description = text(self.selected_description())
+                .size(DESCRIPTION_SIZE)
+                .font(iced::Font::DEFAULT)
+                .shaping(text::Shaping::Advanced)
+                .wrapping(text::Wrapping::Word)
+                .align_x(iced::alignment::Horizontal::Center)
+                .align_y(iced::alignment::Vertical::Center)
+                .width(Length::Fill)
+                .height(self.description_height)
+                .color(chip_text);
+            content = content.push(description);
+        }
 
-        container(column![
-            row(cells).spacing(CELL_SPACING).align_y(iced::Alignment::Center),
-            description,
-        ].spacing(DESCRIPTION_SPACING).align_x(iced::Alignment::Center))
+        container(content)
             .padding(10)
             .center_x(Length::Fill)
             .center_y(Length::Fill)

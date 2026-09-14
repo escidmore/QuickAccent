@@ -99,7 +99,7 @@ fn main() -> iced::Result {
         .subscription(app::App::subscription)
         .theme(app::App::theme)
         .style(app::App::style)
-        .run_with(move || app::App::new(grab_rx_clone.clone(), config.items_per_page))
+        .run_with(move || app::App::new(grab_rx_clone.clone(), config.items_per_page, config.show_unicode_description))
 }
 
 /// Linux startup sequence with load-bearing ordering: make every accent

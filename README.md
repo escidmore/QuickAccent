@@ -109,13 +109,14 @@ INSTALL_FROM_SOURCE=1 ./dist/linux/install.sh
 
 `~/.config/quickaccent/config.toml` is created on first run. Languages reload
 automatically; appearance is refreshed when a window opens. Restart to apply
-timing, activation-key, or pagination changes:
+timing, activation-key, pagination, or character-description changes:
 
 ```toml
 languages = ["French", "German", "Spanish"]
 # hold_delay_ms = 250
 # theme = "system"   # or "light" / "dark" — picker and settings appearance
 # items_per_page = 0
+# show_unicode_description = true
 ```
 
 On macOS the *Settings…* window in the menu-bar menu edits `languages` and
@@ -143,6 +144,10 @@ provide complete Unicode 17.0 repertoires through Latin-key lookup. See
 ## Usage
 
 ### Character descriptions
+
+Descriptions are on by default. Set `show_unicode_description = false` in
+`~/.config/quickaccent/config.toml` and restart QuickAccent to hide the footer
+and remove its extra space. Set it back to `true` to enable it again.
 
 Below the choices, the picker shows the selected character's Unicode code point
 and official Unicode 17.0 name, for example `(U+0163) LATIN SMALL LETTER T WITH
