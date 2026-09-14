@@ -1,7 +1,6 @@
 //! Session-bus API the GNOME Shell panel menu calls (Settings… / Quit).
 
-use std::sync::OnceLock;
-
+use zbus::connection::Builder;
 use zbus::interface;
 
 struct Service;
@@ -17,8 +16,8 @@ impl Service {
     }
 }
 
-/// Export the well-known name on a background thread. The connection is
-/// kept alive for the process lifetime.
+/// Export the well-known name on a background thread with its own Tokio
+/// runtime (zbus's tokio backend will not run on a bare OS thread).
 pub fn start() {
     std::thread::Builder::new()
         .name("quickaccent-dbus".into())
@@ -27,25 +26,27 @@ pub fn start() {
 }
 
 fn serve() {
-    static CONN: OnceLock<zbus::blocking::Connection> = OnceLock::new();
-    let conn = match zbus::blocking::Connection::session() {
-        Ok(c) => c,
+    let rt = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(rt) => rt,
         Err(e) => {
-            eprintln!("[QuickAccent] D-Bus session: {e}");
+            eprintln!("[QuickAccent] D-Bus runtime: {e}");
             return;
         }
     };
-    if let Err(e) = conn
-        .object_server()
-        .at("/io/github/victormasson/QuickAccent", Service)
-    {
-        eprintln!("[QuickAccent] D-Bus export: {e}");
-        return;
+    if let Err(e) = rt.block_on(export()) {
+        eprintln!("[QuickAccent] D-Bus: {e}");
     }
-    if let Err(e) = conn.request_name("io.github.victormasson.QuickAccent") {
-        eprintln!("[QuickAccent] D-Bus name: {e}");
-        return;
-    }
-    let _ = CONN.set(conn);
-    std::thread::park();
+}
+
+async fn export() -> zbus::Result<()> {
+    let _conn = Builder::session()?
+        .name("io.github.victormasson.QuickAccent")?
+        .serve_at("/io/github/victormasson/QuickAccent", Service)?
+        .build()
+        .await?;
+    std::future::pending::<()>().await;
+    Ok(())
 }
