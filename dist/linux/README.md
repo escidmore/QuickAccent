@@ -70,12 +70,13 @@ systemctl --user restart quickaccent.service
 ## Multi-monitor overlay (GNOME)
 
 Wayland hides window positions from apps, so QuickAccent self-installs a
-micro GNOME Shell extension (`quickaccent-focus@victormasson.github.io`,
-sources in `dist/linux/gnome-extension/`) that reports the focused window's
-rectangle over D-Bus. The picker then opens centered on the window you are
-typing in — i.e. on the right monitor. **Log out/in once** after the first
-run so GNOME loads the extension; until then (and on other desktops) the
-overlay is centered on the primary monitor. Remove it with
+GNOME Shell extension (`quickaccent-focus@victormasson.github.io`, sources
+in `dist/linux/gnome-extension/`) that reports the focused window's
+rectangle over D-Bus and adds a top-bar *QuickAccent* menu (*Settings…* /
+*Quit*). The picker then opens centered on the window you are typing in —
+i.e. on the right monitor. **Log out/in once** after the first run so GNOME
+loads the extension; until then (and on other desktops) the overlay is
+centered on the primary monitor and there is no panel button. Remove it with
 `gnome-extensions disable quickaccent-focus@victormasson.github.io` and by
 deleting its directory under `~/.local/share/gnome-shell/extensions/`.
 Known limitation: with fractional display scaling the position can be offset.

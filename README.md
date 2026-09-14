@@ -135,12 +135,14 @@ INSTALL_FROM_SOURCE=1 ./dist/linux/install.sh
 ```toml
 languages = ["French", "German", "Spanish"]
 # hold_delay_ms = 250
-# theme = "system"   # or "light" / "dark" — picker and settings appearance
+# theme = "system"   # system | light | dark | dracula
+                     # catppuccin-latte | catppuccin-frappe | catppuccin-macchiato | catppuccin-mocha
+                     # rose-pine | rose-pine-moon | rose-pine-dawn
 ```
 
-On macOS the *Settings…* window in the menu-bar menu edits `languages` and
-`theme` for you (only those lines are rewritten; comments and other keys are
-kept).
+On macOS the *Settings…* window in the menu-bar menu (and on GNOME the top-bar
+*QuickAccent* menu) edits `languages` and `theme` for you (only those lines are
+rewritten; comments and other keys are kept).
 
 **Languages:** Catalan, CrimeanTatar, Croatian, Czech, Danish, Dutch, Esperanto, Estonian, Finnish, French, German, Greek, Hungarian, IPA, Iceland, Irish, Italian, Kurdish, Lithuanian, Maltese, Maori, Norwegian, Pinyin, Polish, Portuguese, ProtoIndoEuropean, Romanian, Romanization, ScottishGaelic, Serbian, Slovak, Slovenian, Spanish, Swedish, Turkish, Vietnamese, Welsh
 

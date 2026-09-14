@@ -5,6 +5,17 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **GNOME top-bar menu.** The helper Shell extension now shows a *QuickAccent*
+  panel button with *Settings…* and *Quit QuickAccent*, matching the macOS
+  menu-bar item. Settings and quit go over D-Bus to the running daemon.
+- **Named palettes.** Appearance in Settings is a theme selector: System /
+  Light / Dark, plus Dracula, Catppuccin (Latte, Frappé, Macchiato, Mocha)
+  and Rosé Pine (Main, Moon, Dawn). Values are stored as `theme = "..."` in
+  `config.toml`. The picker overlay follows the same palette. On Linux,
+  System follows GNOME `color-scheme`.
+
 ## [1.2.0] - 2026-09-14
 
 ### Added

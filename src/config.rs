@@ -14,10 +14,30 @@ pub enum ThemeChoice {
     System,
     Light,
     Dark,
+    Dracula,
+    CatppuccinLatte,
+    CatppuccinFrappe,
+    CatppuccinMacchiato,
+    CatppuccinMocha,
+    RosePine,
+    RosePineMoon,
+    RosePineDawn,
 }
 
 impl ThemeChoice {
-    pub const ALL: [ThemeChoice; 3] = [ThemeChoice::System, ThemeChoice::Light, ThemeChoice::Dark];
+    pub const ALL: [ThemeChoice; 11] = [
+        ThemeChoice::System,
+        ThemeChoice::Light,
+        ThemeChoice::Dark,
+        ThemeChoice::Dracula,
+        ThemeChoice::CatppuccinLatte,
+        ThemeChoice::CatppuccinFrappe,
+        ThemeChoice::CatppuccinMacchiato,
+        ThemeChoice::CatppuccinMocha,
+        ThemeChoice::RosePine,
+        ThemeChoice::RosePineMoon,
+        ThemeChoice::RosePineDawn,
+    ];
 
     /// The value written to `config.toml`.
     pub fn as_str(self) -> &'static str {
@@ -25,6 +45,14 @@ impl ThemeChoice {
             ThemeChoice::System => "system",
             ThemeChoice::Light => "light",
             ThemeChoice::Dark => "dark",
+            ThemeChoice::Dracula => "dracula",
+            ThemeChoice::CatppuccinLatte => "catppuccin-latte",
+            ThemeChoice::CatppuccinFrappe => "catppuccin-frappe",
+            ThemeChoice::CatppuccinMacchiato => "catppuccin-macchiato",
+            ThemeChoice::CatppuccinMocha => "catppuccin-mocha",
+            ThemeChoice::RosePine => "rose-pine",
+            ThemeChoice::RosePineMoon => "rose-pine-moon",
+            ThemeChoice::RosePineDawn => "rose-pine-dawn",
         }
     }
 
@@ -33,7 +61,21 @@ impl ThemeChoice {
             ThemeChoice::System => "System",
             ThemeChoice::Light => "Light",
             ThemeChoice::Dark => "Dark",
+            ThemeChoice::Dracula => "Dracula",
+            ThemeChoice::CatppuccinLatte => "Catppuccin Latte",
+            ThemeChoice::CatppuccinFrappe => "Catppuccin Frappé",
+            ThemeChoice::CatppuccinMacchiato => "Catppuccin Macchiato",
+            ThemeChoice::CatppuccinMocha => "Catppuccin Mocha",
+            ThemeChoice::RosePine => "Rosé Pine",
+            ThemeChoice::RosePineMoon => "Rosé Pine Moon",
+            ThemeChoice::RosePineDawn => "Rosé Pine Dawn",
         }
+    }
+}
+
+impl std::fmt::Display for ThemeChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
     }
 }
 
@@ -84,6 +126,14 @@ impl Config {
         match self.theme.to_ascii_lowercase().as_str() {
             "light" => ThemeChoice::Light,
             "dark" => ThemeChoice::Dark,
+            "dracula" => ThemeChoice::Dracula,
+            "catppuccin-latte" => ThemeChoice::CatppuccinLatte,
+            "catppuccin-frappe" => ThemeChoice::CatppuccinFrappe,
+            "catppuccin-macchiato" => ThemeChoice::CatppuccinMacchiato,
+            "catppuccin-mocha" => ThemeChoice::CatppuccinMocha,
+            "rose-pine" => ThemeChoice::RosePine,
+            "rose-pine-moon" => ThemeChoice::RosePineMoon,
+            "rose-pine-dawn" => ThemeChoice::RosePineDawn,
             _ => ThemeChoice::System,
         }
     }
@@ -121,12 +171,18 @@ pub fn load_config() -> Config {
                 config
             }
             Err(e) => {
-                eprintln!("[QuickAccent] Failed to parse config: {}. Using defaults.", e);
+                eprintln!(
+                    "[QuickAccent] Failed to parse config: {}. Using defaults.",
+                    e
+                );
                 Config::default()
             }
         },
         Err(_) => {
-            eprintln!("[QuickAccent] No config file found. Creating default at {}", path.display());
+            eprintln!(
+                "[QuickAccent] No config file found. Creating default at {}",
+                path.display()
+            );
             let config = Config::default();
             // Try to create default config file
             if let Some(parent) = path.parent() {
@@ -161,7 +217,10 @@ languages = ["French"]
 # Default: "Both"
 # activation_key = "Both"
 
-# Appearance of the picker and the settings window: "system", "light" or "dark"
+# Appearance of the picker and the settings window:
+#   system, light, dark, dracula,
+#   catppuccin-latte, catppuccin-frappe, catppuccin-macchiato, catppuccin-mocha,
+#   rose-pine, rose-pine-moon, rose-pine-dawn
 # Default: "system"
 # theme = "system"
 "#;
@@ -189,7 +248,11 @@ pub fn parse_config_str(contents: &str) -> Result<Config, toml::de::Error> {
 pub fn set_languages(languages: &[String]) -> std::io::Result<()> {
     let value = format!(
         "[{}]",
-        languages.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>().join(", ")
+        languages
+            .iter()
+            .map(|l| format!("{l:?}"))
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     set_value("languages", &value)
 }
@@ -286,7 +349,10 @@ mod tests {
             "#,
         )
         .unwrap();
-        assert_eq!(c.languages, vec!["German".to_string(), "Spanish".to_string()]);
+        assert_eq!(
+            c.languages,
+            vec!["German".to_string(), "Spanish".to_string()]
+        );
         assert_eq!(c.input_time_ms, 100);
         assert_eq!(c.hold_delay_ms, 300);
         assert_eq!(c.activation_key_parsed(), ActivationKey::Space);
@@ -336,18 +402,43 @@ mod tests {
             replace_assignment(none, "languages", "[\"Welsh\"]"),
             "# languages = [\"French\"]\nlanguages_extra = 1\n\nlanguages = [\"Welsh\"]\n"
         );
-        assert_eq!(replace_assignment("", "languages", "[]"), "languages = []\n");
+        assert_eq!(
+            replace_assignment("", "languages", "[]"),
+            "languages = []\n"
+        );
     }
 
     #[test]
     fn theme_round_trips_through_the_file() {
         let doc = "languages = [\"French\"]\n# theme = \"system\"\n";
         let out = replace_assignment(doc, "theme", "\"dark\"");
-        assert_eq!(out, "languages = [\"French\"]\n# theme = \"system\"\n\ntheme = \"dark\"\n");
-        assert_eq!(parse_config_str(&out).unwrap().theme_parsed(), ThemeChoice::Dark);
+        assert_eq!(
+            out,
+            "languages = [\"French\"]\n# theme = \"system\"\n\ntheme = \"dark\"\n"
+        );
+        assert_eq!(
+            parse_config_str(&out).unwrap().theme_parsed(),
+            ThemeChoice::Dark
+        );
         let again = replace_assignment(&out, "theme", "\"light\"");
-        assert_eq!(parse_config_str(&again).unwrap().theme_parsed(), ThemeChoice::Light);
+        assert_eq!(
+            parse_config_str(&again).unwrap().theme_parsed(),
+            ThemeChoice::Light
+        );
         assert_eq!(Config::default().theme_parsed(), ThemeChoice::System);
-        assert_eq!(parse_config_str("theme = \"weird\"\n").unwrap().theme_parsed(), ThemeChoice::System);
+        assert_eq!(
+            parse_config_str("theme = \"weird\"\n")
+                .unwrap()
+                .theme_parsed(),
+            ThemeChoice::System
+        );
+        for choice in ThemeChoice::ALL {
+            assert_eq!(
+                parse_config_str(&format!("theme = {:?}\n", choice.as_str()))
+                    .unwrap()
+                    .theme_parsed(),
+                choice
+            );
+        }
     }
 }
