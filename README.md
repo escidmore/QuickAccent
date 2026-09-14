@@ -130,9 +130,9 @@ INSTALL_FROM_SOURCE=1 ./dist/linux/install.sh
 
 ## Config
 
-`~/.config/quickaccent/config.toml` is created on first run. Languages reload
-automatically; appearance is refreshed when a window opens. Restart to apply
-timing, activation-key, or pagination changes:
+`~/.config/quickaccent/config.toml` is created on first run. Languages, timing,
+and activation-key changes reload automatically; appearance is refreshed when
+a window opens. Restart to apply pagination changes:
 
 ```toml
 languages = ["French", "German", "Spanish"]
